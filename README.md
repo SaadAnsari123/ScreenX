@@ -93,7 +93,9 @@ ollama run llama3
 In the extracter_llama.py file, update the following:
 
 SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co"
+
 SUPABASE_API_KEY = "YOUR_SUPABASE_API_KEY"
+
 SUPABASE_TABLE = "Resume_Details"
 
 _Make sure your Supabase table includes:_

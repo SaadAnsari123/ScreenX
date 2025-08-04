@@ -47,30 +47,36 @@ ScreenX is an AI-powered resume parser and screening tool built using Python. It
   -Supabase for backend data storage
 
  **Libraries:**
+ 
   -pdfplumber for reading PDF text
+  
   -requests for Supabase API communication
   
 **Other Tools:**
+
   -LLaMA 3 (8B) model (~4.7 GB) via Ollama
 
 **Installation**
+
 _**Prerequisites**_
 
   -Python 3.x
+  
   -Pip
+  
   -Ollama (for running LLaMA 3)
+  
   -A Supabase account + project setup
 
 **Steps**
+
 1.**Clone the Repository:**
 
-bash
 git clone https://github.com/SaadAnsari123/ScreenX.git
 cd ScreenX
 
 2.**Install Python Dependencies:**
 
-bash
 pip install -r requirements.txt
 
 3.**Install and Run Ollama:**
@@ -79,7 +85,6 @@ Download Ollama: 👉 https://ollama.com/download
 
 Then run the following in your terminal:
 
-bash
 ollama run llama3
 
 4.**Configure Your Supabase Details:**
@@ -93,12 +98,19 @@ SUPABASE_TABLE = "Resume_Details"
 _Make sure your Supabase table includes:_
 
   -candidate_name (text)
+  
   -email (text)
+  
   -phone (text)
+  
   -skills (text[] or comma-separated text)
+  
   -experience (integer)
+  
   -highest_edu (text)
+  
   -role_applied (text)
+  
   -screened_on (timestamp)
 
 *✅ Ensure Row Level Security (RLS) is disabled or appropriate insert permissions are given to the public/anon role.**

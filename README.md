@@ -6,7 +6,7 @@ ScreenX is an AI-powered resume parser and screening tool built using Python. It
 
 ## Features
 
-1.**Resume Parsing:**
+1. **Resume Parsing:**
 
 -Upload a resume in PDF format.
 -Extract structured candidate data, including:
@@ -19,30 +19,31 @@ ScreenX is an AI-powered resume parser and screening tool built using Python. It
   role_applied
   screened_on (timestamp)
 
-2.**AI-Powered Extraction:**
+2. **AI-Powered Extraction:**
 
 -Uses the locally hosted LLaMA 3 model via Ollama for smart data extraction instead of traditional regex or keyword methods.
 
-3.**Supabase Integration:**
+3. **Supabase Integration:**
 
 -Automatically uploads parsed data to a Supabase table.
 -Fully compatible with PostgreSQL and RESTful API.
 
-4.**PDF Resume Support:**
+4. **PDF Resume Support:**
 
 -Leverages the pdfplumber library to extract text cleanly from PDF documents.
 
-5.**Simple CLI Workflow:**
+5. **Simple CLI Workflow:**
 
 -Just run the script and everything works from parsing to uploading — no need for a UI.
 
-6.**Technologies Used**
-**Core:**
+6. **Technologies Used**
+
+ **Core:**
   -Python 3
   -Ollama for running LLaMA 3 locally
   -Supabase for backend data storage
 
-**Libraries:**
+ **Libraries:**
   -pdfplumber for reading PDF text
   -requests for Supabase API communication
   

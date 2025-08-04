@@ -73,6 +73,7 @@ _**Prerequisites**_
 1.**Clone the Repository:**
 
 git clone https://github.com/SaadAnsari123/ScreenX.git
+
 cd ScreenX
 
 2.**Install Python Dependencies:**

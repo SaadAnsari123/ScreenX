@@ -31,7 +31,7 @@ This project is a Python-based tool that extracts structured data from resume PD
 
 ## 🚀 Setup Instructions
 
-### 1. Clone the Repository
+ 1. Clone the Repository
 
 ```bash
 git clone https://github.com/SaadAnsari123/ScreenX.git

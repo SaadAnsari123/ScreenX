@@ -39,8 +39,11 @@ ScreenX is an AI-powered resume parser and screening tool built using Python. It
 6. **Technologies Used**
 
  **Core:**
+ 
   -Python 3
+  
   -Ollama for running LLaMA 3 locally
+  
   -Supabase for backend data storage
 
  **Libraries:**

@@ -23,9 +23,9 @@ This project is a Python-based tool that extracts structured data from resume PD
 ## 🧰 Tech Stack
 
 - Python 3
-- [Ollama](https://ollama.com/) (for running LLaMA 3 locally)
-- Supabase (REST API)
-- pdfplumber (PDF reading)
+- [Ollama](https://ollama.com/) – for running LLaMA 3 locally
+- Supabase (PostgreSQL + REST API)
+- pdfplumber – for PDF text extraction
 
 ---
 
@@ -35,47 +35,75 @@ This project is a Python-based tool that extracts structured data from resume PD
 
 ```bash
 git clone https://github.com/SaadAnsari123/ScreenX.git
-cd ScreenX-supabase
-
-### **2. Install Python Dependencies**
-'''bash
+cd ScreenX
+2. Install Python Dependencies
+bash
+Copy
+Edit
 pip install -r requirements.txt
+requirements.txt should include:
 
-**### 3. Install and Run Ollama**
-Download and install Ollama:
+nginx
+Copy
+Edit
+pdfplumber
+requests
+3. Install and Run Ollama
+Download Ollama from:
 👉 https://ollama.com/download
 
-Then in your terminal:
+Then open your terminal and run:
+
+bash
+Copy
+Edit
 ollama run llama3
+🧠 This will download (~4.7 GB) and run the LLaMA 3 model locally.
 
-This will pull and run the llama3 model locally.
-Note: The LLaMA 3 8B model is ~4.7 GB.
+⚙️ Configuration
+In the extracter_llama.py script, update the following:
 
-**🛠️ Configuration**
-In the Python script (extracter_llama.py), replace the following:
+python
+Copy
+Edit
 SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co"
 SUPABASE_API_KEY = "YOUR_SUPABASE_API_KEY"
 SUPABASE_TABLE = "Resume_Details"
-Ensure Supabase table fields match the extracted JSON structure:
+Make sure your Supabase table has the following fields:
 
 candidate_name (text)
+
 email (text)
+
 phone (text)
-skills (array or text[])
+
+skills (text[] or comma-separated text)
+
 experience (integer)
+
 highest_edu (text)
+
 role_applied (text)
+
 screened_on (timestamp)
 
-Also, make sure Row Level Security (RLS) is disabled or allow INSERT for anonymous/public role.
+✅ Also ensure:
 
-**📄 Usage**
-Put your PDF file in the repo folder and rename it if needed:
+Row Level Security (RLS) is disabled, or
 
-'''bash
+A policy allows INSERT for the anon/public role.
+
+📄 Usage
+Place your PDF file (e.g., sample_resume.pdf) in the project folder, then run:
+
+bash
+Copy
+Edit
 python extracter_llama.py
+This will:
 
-It will:
-Parse the resume
-Ask LLaMA 3 to extract JSON
-Upload data to Supabase
+Extract text from the resume
+
+Use LLaMA 3 to convert it to structured JSON
+
+Upload the result to your Supabase table

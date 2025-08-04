@@ -84,7 +84,7 @@ pip install -r requirements.txt
 
 Download Ollama: 👉 https://ollama.com/download
 
-Then run the following in your terminal:
+**_Then run the following in your terminal:_**
 
 ollama run llama3
 
@@ -122,5 +122,4 @@ _Make sure your Supabase table includes:_
 
 Place your resume PDF (e.g., resume.pdf) in the project folder and run:
 
-bash
 python extracter_llama.py

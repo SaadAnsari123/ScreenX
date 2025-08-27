@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import simpledialog
 from pathlib import Path
 import asyncio
 import aiohttp
@@ -7,13 +8,17 @@ import orjson
 import pypdfium2 as pdfium
 import threading
 import re
+import requests
+import numpy as np
 import datetime
-
 
 # --- CONFIGURATION ---
 OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3.2"  # Change to any model you have: phi3, mistral, etc.
+OLLAMA_MODEL = "llama3.2"  # Change to any model you have
 OLLAMA_TIMEOUT = 120
+
+OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
+EMBED_MODEL = "nomic-embed-text"   # run once: ollama pull nomic-embed-text
 
 OUTPUT_DIR = Path("processed_resumes")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -57,14 +62,12 @@ async def query_ollama(prompt: str, callback):
                         callback(f"❌ Ollama Error {resp.status}: {error_text}")
                         return
 
-                    buffer = ""
                     async for line in resp.content:
                         if line:
                             try:
                                 chunk = orjson.loads(line)
                                 if "response" in chunk:
                                     token = chunk["response"]
-                                    buffer += token
                                     callback(token)
                             except Exception:
                                 pass
@@ -76,11 +79,21 @@ async def query_ollama(prompt: str, callback):
 
 # --- GUI APPLICATION ---
 class ResumeChatbotApp:
+    KNOWN_SKILLS = {
+        "python","java","javascript","typescript","c","c++","go","rust",
+        "django","flask","fastapi","spring","react","node","express",
+        "sql","postgres","mysql","mongodb","pandas","numpy","scikit-learn","pytorch","tensorflow",
+        "git","docker","kubernetes","terraform","linux","bash","ci","cd",
+        "aws","azure","gcp","rest","graphql"
+    }
+
     def __init__(self, root):
         self.root = root
         self.root.title("💬 Resume Chatbot")
         self.root.geometry("900x700")
         self.is_processing = False
+
+        self.resume_map = {}  # name -> raw resume text
 
         self.setup_ui()
 
@@ -101,6 +114,11 @@ class ResumeChatbotApp:
 
         self.load_btn = ttk.Button(ctrl_frame, text="📁 Load Resumes Folder", command=self.load_resumes)
         self.load_btn.pack(side=tk.LEFT, padx=5)
+
+        # ⭐ Rank button
+        self.rank_btn = ttk.Button(ctrl_frame, text="⭐ Rank Resumes", command=self.rank_resumes)
+        self.rank_btn.pack(side=tk.LEFT, padx=5)
+        self.rank_btn.config(state="disabled")  # Enable only after resumes load
 
         self.status_label = ttk.Label(ctrl_frame, text="Ready", foreground="gray")
         self.status_label.pack(side=tk.LEFT, padx=10)
@@ -153,27 +171,22 @@ class ResumeChatbotApp:
         global resumes_text, candidate_names
         full_text = []
         candidate_names = []
+        self.resume_map = {}
 
         for i, pdf in enumerate(pdf_files):
             try:
                 text = extract_text_from_pdf(str(pdf))
-                # Guess name from first line
                 name = text.splitlines()[0].strip() if text else pdf.stem
                 candidate_names.append(name)
-
-                # Add to full context
+                self.resume_map[name] = text
                 full_text.append(f"--- Resume: {name} ({pdf.name}) ---\n{text}")
             except Exception as e:
                 full_text.append(f"--- Resume: {pdf.name} ---\n[Failed to extract: {e}]")
 
-            # Update progress
             self.root.after(0, lambda i=i: self.status_label.config(
                 text=f"Processed {i + 1}/{len(pdf_files)} resumes..."))
 
-        # Save combined context
         resumes_text = "\n\n".join(full_text)
-
-        # Update UI
         self.root.after(0, self.on_resumes_loaded)
 
     def on_resumes_loaded(self):
@@ -181,12 +194,13 @@ class ResumeChatbotApp:
         self.load_btn.config(state="normal")
         self.user_input.config(state="normal")
         self.send_btn.config(state="normal")
-        self.status_label.config(text=f"✅ Loaded {len(candidate_names)} resumes. You can now ask questions.")
+        self.rank_btn.config(state="normal")
+        self.status_label.config(text=f"✅ Loaded {len(self.resume_map)} resumes. You can now ask questions.")
         self.append_message("🤖 Bot", "Hello! I've loaded the resumes. You can now ask questions like:\n"
                                       "- 'Who knows Python?'\n"
                                       "- 'List candidates with AWS experience'\n"
                                       "- 'Show me contact info for Alex'\n"
-                                      "Go ahead and ask anything!")
+                                      "Or click ⭐ Rank Resumes to compare candidates with a job description.")
 
     def send_question(self):
         question = self.user_input.get().strip()
@@ -196,8 +210,6 @@ class ResumeChatbotApp:
         self.append_message("You", question)
         self.user_input.delete(0, tk.END)
         self.send_btn.config(state="disabled")
-
-        # Run async query in thread
         threading.Thread(target=self._query_async, args=(question,), daemon=True).start()
 
     def _query_async(self, question):
@@ -221,7 +233,6 @@ Instructions:
             self.root.after(0, lambda: self.append_token(token))
 
         asyncio.run(query_ollama(prompt, token_callback))
-
         self.root.after(0, lambda: self.send_btn.config(state="normal"))
 
     def append_message(self, sender: str, msg: str):
@@ -232,17 +243,119 @@ Instructions:
 
     def append_token(self, token: str):
         self.chat_area.config(state="normal")
-        if self.chat_area.get("end-2c", "end") == "\n\n":  # If last char is newline, insert sender
+        if self.chat_area.get("end-2c", "end") == "\n\n":
             self.chat_area.insert(tk.END, "🤖 Bot: ")
         self.chat_area.insert(tk.END, token)
         self.chat_area.config(state="disabled")
         self.chat_area.see(tk.END)
 
+    # ---------------------------
+    # ⭐ Resume Ranking Feature
+    # ---------------------------
+    def rank_resumes(self):
+        global candidate_names
+
+        if not self.resume_map:
+            messagebox.showwarning("No Data", "Please load resumes first.")
+            return
+
+        job_desc = simpledialog.askstring("Job Description", "Enter the job description:")
+        if not job_desc:
+            return
+
+        try:
+            jd_vec = self._embed(job_desc)
+            ranked = []
+            for name in candidate_names:
+                resume_text = self.resume_map.get(name, "")
+                if not resume_text.strip():
+                    ranked.append((0, name))
+                    continue
+
+                res_vec = self._embed(resume_text)
+                sim = self._cosine(jd_vec, res_vec)
+                kw = self._skill_match_score(job_desc, resume_text)
+                final = 0.85 * sim + 0.15 * kw
+                score_10 = int(round(10 * final))
+                ranked.append((score_10, name))
+
+            ranked.sort(reverse=True, key=lambda x: x[0])
+            self.append_message("🤖 Bot", "📋 Ranked Resumes (semantic + keywords):")
+            for score, name in ranked:
+                self.append_message("🤖 Bot", f"{name}: {score}/10")
+
+        except Exception:
+            # fallback LLM scoring
+            self.append_message("🤖 Bot", "Embedding model not available; falling back to LLM scoring.")
+            ranked = []
+            for name in candidate_names:
+                resume_text = self.resume_map.get(name, "")
+                score = self._rank_with_ollama(job_desc, resume_text)
+                ranked.append((score, name))
+            ranked.sort(reverse=True, key=lambda x: x[0])
+            for score, name in ranked:
+                self.append_message("🤖 Bot", f"{name}: {score}/10")
+
+    def _rank_with_ollama(self, job_desc, resume_text):
+        prompt = f"""
+You are an expert recruiter. Rate this resume from 1 (worst match) to 10 (perfect match) for the given job description.
+
+Job Description:
+{job_desc}
+
+Resume:
+{resume_text}
+
+Only respond with the score (1-10).
+"""
+        try:
+            resp = requests.post(OLLAMA_URL, json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False
+            }, timeout=60)
+            result = resp.json()
+            return int(str(result.get("response", "")).strip())
+        except Exception as e:
+            print("LLM ranking error:", e)
+            return 0
+
+    # ---------------------------
+    # Embedding + keyword helpers
+    # ---------------------------
+    def _embed(self, text: str) -> np.ndarray:
+        resp = requests.post(OLLAMA_EMBED_URL, json={
+            "model": EMBED_MODEL,
+            "prompt": text
+        }, timeout=60)
+        resp.raise_for_status()
+        vec = resp.json().get("embedding")
+        if not vec:
+            raise RuntimeError("No embedding returned")
+        return np.array(vec, dtype=float)
+
+    def _cosine(self, a: np.ndarray, b: np.ndarray) -> float:
+        denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-8
+        return float(np.dot(a, b) / denom)
+
+    def _extract_skills(self, text: str) -> set:
+        tokens = re.findall(r"[A-Za-z\+\#\.]+", text.lower())
+        cleaned = [t.strip(".") for t in tokens]
+        return {t for t in cleaned if t in self.KNOWN_SKILLS}
+
+    def _skill_match_score(self, jd: str, res: str) -> float:
+        jd_s = self._extract_skills(jd)
+        rs_s = self._extract_skills(res)
+        if not jd_s:
+            return 0.0
+        overlap = len(jd_s & rs_s)
+        return min(overlap, 10) / 10.0
+
 
 # --- START APPLICATION ---
 if __name__ == "__main__":
-    print("💡 Make sure Ollama is running: open terminal and run `ollama serve`")
-    print(f"💡 Make sure you have pulled the model: `ollama pull {OLLAMA_MODEL}`")
+    print(" Make sure Ollama is running: open terminal and run `ollama serve`")
+    print(f" Make sure you have pulled the models: `ollama pull {OLLAMA_MODEL}`, `ollama pull {EMBED_MODEL}`")
 
     root = tk.Tk()
     app = ResumeChatbotApp(root)

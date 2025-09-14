@@ -1,9 +1,6 @@
-# resume_screener.py - Font size increased + INPUT BOX FIXED
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, simpledialog
 from pathlib import Path
-import asyncio
-import aiohttp
 import orjson
 import pypdfium2 as pdfium
 import threading
@@ -11,14 +8,16 @@ import re
 import requests
 import numpy as np
 import datetime
+import subprocess
+import sys
+import os
 
 # --- CONFIGURATION ---
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3.2"
-OLLAMA_TIMEOUT = 120
-
+OLLAMA_MODEL = "llama3.2"           # Must be pulled: ollama pull llama3.2
+OLLAMA_EMBED_MODEL = "nomic-embed-text"  # Must be pulled: ollama pull nomic-embed-text
+OLLAMA_HTTP_URL = "http://localhost:11434/api/generate"   # Default Ollama port (not 8080!)
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
-EMBED_MODEL = "nomic-embed-text"
+OLLAMA_TIMEOUT = 120
 
 OUTPUT_DIR = Path("processed_resumes")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -42,37 +41,118 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     except Exception as e:
         raise RuntimeError(f"Failed to extract text from {pdf_path}: {e}")
 
-# --- OLLAMA COMMUNICATION ---
-async def query_ollama(prompt: str, callback):
-    async with aiohttp.ClientSession() as session:
+# --- OLLAMA COMMUNICATION: HTTP + CLI FALLBACK ---
+def query_ollama_local_fallback(prompt: str, callback):
+    """
+    Try HTTP first; if fails, fall back to ollama CLI subprocess.
+    Works offline if model is pulled locally.
+    Uses 'ollama generate --model <model> --prompt ... --stream'
+    """
+    # Try HTTP first
+    try:
+        import requests
         payload = {
             "model": OLLAMA_MODEL,
             "prompt": prompt,
             "stream": True
         }
-        try:
-            async with asyncio.timeout(OLLAMA_TIMEOUT):
-                async with session.post(OLLAMA_URL, json=payload) as resp:
-                    if resp.status != 200:
-                        error_text = await resp.text()
-                        callback(f"❌ Ollama Error {resp.status}: {error_text}")
-                        return
+        resp = requests.post(OLLAMA_HTTP_URL, json=payload, stream=True, timeout=OLLAMA_TIMEOUT)
+        resp.raise_for_status()
 
-                    async for line in resp.content:
-                        if line:
-                            try:
-                                chunk = orjson.loads(line)
-                                if "response" in chunk:
-                                    token = chunk["response"]
-                                    callback(token)
-                            except Exception:
-                                pass
-        except asyncio.TimeoutError:
-            callback("❌ Request timed out. Try a shorter question.")
-        except Exception as e:
-            callback(f"❌ Connection failed: {str(e)}")
+        for line in resp.iter_lines():
+            if line:
+                try:
+                    chunk = orjson.loads(line)
+                    if "response" in chunk:
+                        token = chunk["response"]
+                        if token:
+                            callback(token)
+                except (orjson.JSONDecodeError, KeyError):
+                    continue
+        return
 
-# --- GUI APPLICATION ---
+    except Exception as http_err:
+        print(f"HTTP failed ({http_err}), falling back to ollama CLI...", file=sys.stderr)
+
+    # Fallback: Use ollama CLI subprocess
+    try:
+        # Ensure ollama is in PATH
+        result = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
+        if result.returncode != 0:
+            callback("❌ 'ollama' CLI not found. Install from https://ollama.com")
+            return
+
+        # Run ollama generate --stream
+        cmd = [
+            "ollama", "generate",
+            "--model", OLLAMA_MODEL,
+            "--prompt", prompt,
+            "--stream"
+        ]
+
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1
+        )
+
+        # Stream output line by line
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                chunk = orjson.loads(line)
+                if "response" in chunk:
+                    token = chunk["response"]
+                    if token:
+                        callback(token)
+            except (orjson.JSONDecodeError, KeyError):
+                # Sometimes ollama outputs non-JSON lines (like progress), ignore
+                continue
+
+        # Wait for completion
+        _, stderr = process.communicate()
+        if process.returncode != 0:
+            callback(f"❌ CLI Error: {stderr.strip()}")
+        return
+
+    except FileNotFoundError:
+        callback("❌ 'ollama' command not found. Install Ollama and pull your model.")
+    except Exception as e:
+        callback(f"❌ CLI failed: {str(e)}")
+
+# --- EMBEDDINGS: LOCAL HTTP ONLY (NO FALLBACK) ---
+def _embed(text: str) -> np.ndarray:
+    """
+    Uses Ollama's embedding API. If this fails, we raise an error.
+    For offline use: ensure 'nomic-embed-text' is pulled: ollama pull nomic-embed-text
+    Alternative: replace with TF-IDF if no embedding model available (see comment below).
+    """
+    try:
+        resp = requests.post(OLLAMA_EMBED_URL, json={
+            "model": OLLAMA_EMBED_MODEL,
+            "prompt": text
+        }, timeout=60)
+        resp.raise_for_status()
+        vec = resp.json().get("embedding")
+        if not vec:
+            raise RuntimeError("No embedding returned")
+        return np.array(vec, dtype=float)
+    except Exception as e:
+        raise RuntimeError(
+            f"❌ Embedding failed: {str(e)}\n"
+            f"Make sure you've pulled the model: ollama pull {OLLAMA_EMBED_MODEL}\n"
+            f"Or switch to TF-IDF fallback (commented out in code)."
+        )
+
+# --- COSINE SIMILARITY & SKILL EXTRACTION ---
+def _cosine(a: np.ndarray, b: np.ndarray) -> float:
+    denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-8
+    return float(np.dot(a, b) / denom)
+
 class ResumeChatbotApp:
     KNOWN_SKILLS = {
         "python","java","javascript","typescript","c","c++","go","rust",
@@ -108,30 +188,25 @@ class ResumeChatbotApp:
         self.load_btn = ttk.Button(ctrl_frame, text="📁 Load Resumes Folder", command=self.load_resumes)
         self.load_btn.pack(side=tk.LEFT, padx=5)
 
-        self.rank_btn = ttk.Button(ctrl_frame, text="⭐ Rank Resumes", command=self.rank_resumes)
-        self.rank_btn.pack(side=tk.LEFT, padx=5)
-        self.rank_btn.config(state="disabled")
-
         self.status_label = ttk.Label(ctrl_frame, text="Ready", foreground="gray")
         self.status_label.pack(side=tk.LEFT, padx=10)
 
-        # --- Chat Area (ScrolledText + Input must be in same parent or managed carefully)
+        # --- Chat Area ---
         chat_container = ttk.LabelFrame(main_frame, text="Chat with Resumes", padding="10")
         chat_container.pack(fill=tk.BOTH, expand=True, pady=10)
 
-        # Chat display
         self.chat_area = scrolledtext.ScrolledText(
             chat_container,
             wrap=tk.WORD,
             state="disabled",
             height=16,
-            font=("Arial", 14)  # ✅ Increased font size
+            font=("Arial", 14)
         )
         self.chat_area.tag_config("user", foreground="black", font=("Arial", 14))
         self.chat_area.tag_config("bot", foreground="darkblue", font=("Arial", 14, "bold"))
         self.chat_area.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-        # --- Input Area (Now properly packed below chat) ---
+        # --- Input Area ---
         input_frame = ttk.Frame(chat_container)
         input_frame.pack(fill=tk.X)
 
@@ -190,7 +265,7 @@ class ResumeChatbotApp:
         self.load_btn.config(state="normal")
         self.user_input.config(state="normal")
         self.send_btn.config(state="normal")
-        self.rank_btn.config(state="normal")
+        
         self.status_label.config(text=f"✅ Loaded {len(self.resume_map)} resumes.")
         self.append_message("🤖 Bot", "Hello! Ask things like:\n\n"
                                       "• Who knows Python?\n"
@@ -204,9 +279,11 @@ class ResumeChatbotApp:
         self.append_message("You", question)
         self.user_input.delete(0, tk.END)
         self.send_btn.config(state="disabled")
-        threading.Thread(target=self._query_async, args=(question,), daemon=True).start()
+        # Synchronous thread call — no asyncio!
+        threading.Thread(target=self._query_sync, args=(question,), daemon=True).start()
 
-    def _query_async(self, question):
+    def _query_sync(self, question):
+        """Synchronous version of query — uses local Ollama via HTTP or CLI fallback."""
         prompt = f"""
 You are an AI assistant that answers questions based ONLY on the following resume data.
 
@@ -225,7 +302,9 @@ Instructions:
         def token_callback(token):
             self.root.after(0, lambda: self.append_token(token))
 
-        asyncio.run(query_ollama(prompt, token_callback))
+        # This function now handles both HTTP and CLI fallback synchronously
+        query_ollama_local_fallback(prompt, token_callback)
+
         self.root.after(0, lambda: self.send_btn.config(state="normal"))
 
     def append_message(self, sender: str, msg: str):
@@ -246,82 +325,6 @@ Instructions:
     # ---------------------------
     # ⭐ Resume Ranking Feature
     # ---------------------------
-    def rank_resumes(self):
-        global candidate_names
-        if not self.resume_map:
-            messagebox.showwarning("No Data", "Load resumes first.")
-            return
-        job_desc = simpledialog.askstring("Job Description", "Enter job description:")
-        if not job_desc:
-            return
-
-        try:
-            jd_vec = self._embed(job_desc)
-            ranked = []
-            for name in candidate_names:
-                resume_text = self.resume_map.get(name, "")
-                if not resume_text.strip():
-                    ranked.append((0, name))
-                    continue
-                res_vec = self._embed(resume_text)
-                sim = self._cosine(jd_vec, res_vec)
-                kw = self._skill_match_score(job_desc, resume_text)
-                final = 0.85 * sim + 0.15 * kw
-                score_10 = int(round(10 * final))
-                ranked.append((score_10, name))
-            ranked.sort(reverse=True, key=lambda x: x[0])
-            self.append_message("🤖 Bot", "📋 Ranked Resumes:")
-            for score, name in ranked:
-                self.append_message("🤖 Bot", f"{name}: {score}/10")
-        except Exception:
-            self.append_message("🤖 Bot", "Falling back to LLM scoring...")
-            ranked = []
-            for name in candidate_names:
-                resume_text = self.resume_map.get(name, "")
-                score = self._rank_with_ollama(job_desc, resume_text)
-                ranked.append((score, name))
-            ranked.sort(reverse=True, key=lambda x: x[0])
-            for score, name in ranked:
-                self.append_message("🤖 Bot", f"{name}: {score}/10")
-
-    def _rank_with_ollama(self, job_desc, resume_text):
-        prompt = f"""
-You are an expert recruiter. Rate this resume from 1 (worst match) to 10 (perfect match).
-
-Job Description:
-{job_desc}
-
-Resume:
-{resume_text}
-
-Only respond with the score (1-10).
-"""
-        try:
-            resp = requests.post(OLLAMA_URL, json={
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False
-            }, timeout=60)
-            result = resp.json()
-            return int(str(result.get("response", "")).strip())
-        except Exception as e:
-            print("Ranking error:", e)
-            return 0
-
-    def _embed(self, text: str) -> np.ndarray:
-        resp = requests.post(OLLAMA_EMBED_URL, json={
-            "model": EMBED_MODEL,
-            "prompt": text
-        }, timeout=60)
-        resp.raise_for_status()
-        vec = resp.json().get("embedding")
-        if not vec:
-            raise RuntimeError("No embedding returned")
-        return np.array(vec, dtype=float)
-
-    def _cosine(self, a: np.ndarray, b: np.ndarray) -> float:
-        denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-8
-        return float(np.dot(a, b) / denom)
 
     def _extract_skills(self, text: str) -> set:
         tokens = re.findall(r"[A-Za-z\+\#\.]+", text.lower())

@@ -1,2 +1,2 @@
 
-    root.mainloop()
+        if hasattr(self, 'user_input'):

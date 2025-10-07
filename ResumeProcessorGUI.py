@@ -15,8 +15,6 @@ from PIL import Image, ImageTk
 import time
 import json
 
-# --- CONFIGURATION ---
-OLLAMA_MODEL = "llama3.2"           # Must be pulled: ollama pull llama3.2
 OLLAMA_EMBED_MODEL = "nomic-embed-text"  # Must be pulled: ollama pull nomic-embed-text
 OLLAMA_HTTP_URL = "http://localhost:11434/api/generate"   # Default Ollama port (not 8080!)
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
@@ -55,7 +53,7 @@ def query_ollama_local_fallback(prompt: str, callback):
     try:
         import requests
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": "llama3.2",
             "prompt": prompt,
             "stream": True,
             "options": {
@@ -186,6 +184,7 @@ class ResumeChatbotApp:
         
         self.setup_styles()
         self.show_welcome_page()
+        self.resumes_loaded = False
         
     def load_user_preferences(self):
         """Load user preferences from file if exists"""
@@ -292,28 +291,27 @@ class ResumeChatbotApp:
         )
         subtitle_label.pack()
         
-        # Features section
-        features_frame = ttk.Frame(welcome_frame, padding="20", style="TFrame")
-        features_frame.pack(fill=tk.X, pady=20)
+        # Buttons frame
+        button_frame = ttk.Frame(welcome_frame, style="TFrame")
+        button_frame.pack(fill=tk.X, pady=30)
         
-        features = [
-            "📄 Upload and process multiple resumes at once",
-            "🔍 Extract skills, experience, and education automatically",
-            "🤖 Chat with AI to find the perfect candidates",
-            "⭐ Rank candidates based on job requirements",
-            "🔄 Handle synonyms and semantic matching"
-        ]
+        # Load Resume button
+        load_button = ttk.Button(
+            button_frame,
+            text="Load Resumes",
+            command=self.load_resumes,
+            style="Start.TButton"
+        )
+        load_button.pack(pady=20)
         
-        for feature in features:
-            feature_label = ttk.Label(
-                features_frame,
-                text=feature,
-                font=("Arial", 12),
-                padding=(0, 5),
-                foreground=self.text_color,
-                background=self.bg_color
-            )
-            feature_label.pack(anchor="w", pady=5)
+        # Chatbot button
+        chatbot_button = ttk.Button(
+            button_frame,
+            text="Open Chatbot",
+            command=self.transition_to_chatbot,
+            style="Start.TButton"
+        )
+        chatbot_button.pack(pady=20)
         
         # Start button
         button_frame = ttk.Frame(welcome_frame, style="TFrame")
@@ -367,6 +365,11 @@ class ResumeChatbotApp:
         
     def transition_to_chatbot(self):
         """Smooth transition from welcome page to chatbot UI"""
+        # Check if resumes are loaded before transitioning
+        if not self.resumes_loaded:
+            messagebox.showinfo("No Resumes", "Please load resumes first before accessing the chatbot.")
+            return
+            
         # Create a temporary overlay for transition effect
         overlay = tk.Frame(self.root, bg="#ffffff")
         overlay.place(x=0, y=0, relwidth=1, relheight=1)
@@ -479,13 +482,13 @@ class ResumeChatbotApp:
         theme_btn.pack(fill=tk.X, padx=15, pady=(5, 20))
         
         # Load resumes button in sidebar
-        self.load_btn = ttk.Button(
+        resume_count = len(self.resume_map) if hasattr(self, 'resume_map') and self.resume_map else 0
+        self.resumes_status = ttk.Label(
             sidebar, 
-            text="📁 Load Resumes Folder", 
-            command=self.load_resumes,
-            style="TButton"
+            text=f"Resumes loaded: {resume_count}",
+            style="TLabel"
         )
-        self.load_btn.pack(fill=tk.X, padx=15, pady=5)
+        self.resumes_status.pack(fill=tk.X, padx=15, pady=5)
         
         # Back to welcome button
         back_btn = ttk.Button(
@@ -579,16 +582,26 @@ class ResumeChatbotApp:
         )
         self.send_btn.pack(side=tk.RIGHT)
 
-        # Disable until loaded
-        self.user_input.config(state="disabled")
-        self.send_btn.config(state="disabled")
-        
-        # Add welcome message
-        self.append_message("system", "Welcome to ScreenX! Load a folder with resumes to get started.")
-        self.append_message("system", "You can ask questions like:")
-        self.append_message("system", "• Who has experience with Python?")
-        self.append_message("system", "• Which candidates know React?")
-        self.append_message("system", "• Find candidates with AWS experience")
+        # Enable/disable based on whether resumes are loaded
+        if self.resumes_loaded and hasattr(self, 'resume_map') and self.resume_map:
+            self.user_input.config(state="normal")
+            self.send_btn.config(state="normal")
+            # Add welcome message for loaded resumes
+            self.append_message("🤖 Bot", "Hello! I'm your resume assistant. Ask me things like:\n\n"
+                                        "• Who knows Python?\n"
+                                        "• Show me candidates with AWS experience\n"
+                                        "• Rank these candidates for a Data Scientist role\n"
+                                        "• Which candidate has the most relevant experience?\n"
+                                        "• Give me John's resume (to open the PDF file)")
+        else:
+            self.user_input.config(state="disabled")
+            self.send_btn.config(state="disabled")
+            # Add welcome message for no resumes
+            self.append_message("system", "Welcome to ScreenX! Load a folder with resumes to get started.")
+            self.append_message("system", "You can ask questions like:")
+            self.append_message("system", "• Who has experience with Python?")
+            self.append_message("system", "• Which candidates know React?")
+            self.append_message("system", "• Find candidates with AWS experience")
 
     def load_resumes(self):
         if self.is_processing:
@@ -607,8 +620,10 @@ class ResumeChatbotApp:
         pdf_files = [Path(f) for f in pdf_files]
         
         self.is_processing = True
-        self.load_btn.config(state="disabled")
-        self.status_label.config(text="Processing resumes...", foreground="#e74c3c")
+        
+        # Create a temporary status label if we're on the welcome page
+        if hasattr(self, 'status_label'):
+            self.status_label.config(text="Processing resumes...", foreground="#e74c3c")
         
         # Show loading animation
         self.show_loading_animation()
@@ -621,6 +636,10 @@ class ResumeChatbotApp:
             self.loading_dots = 0
             
         if self.is_processing:
+            # Skip animation if chat_area doesn't exist yet
+            if not hasattr(self, 'chat_area'):
+                return
+                
             self.chat_area.config(state="normal")
             
             # Clear previous loading message if exists
@@ -645,6 +664,7 @@ class ResumeChatbotApp:
         candidate_names = []
         self.resume_map = {}
         self.pdf_paths = {}  # Store paths to original PDF files
+        self.resume_data = []  # Initialize resume data list
 
         for i, pdf in enumerate(pdf_files):
             try:
@@ -653,36 +673,58 @@ class ResumeChatbotApp:
                 candidate_names.append(name)
                 self.resume_map[name] = text
                 self.pdf_paths[name] = str(pdf)  # Store the path to the PDF file
+                self.resume_data.append({"name": name, "path": str(pdf)})  # Add to resume data
                 full_text.append(f"--- Resume: {name} ({pdf.name}) ---\n{text}")
             except Exception as e:
                 full_text.append(f"[Error reading {pdf.name}: {e}]")
-
-            self.root.after(0, lambda i=i: self.status_label.config(
-                text=f"Processed {i + 1}/{len(pdf_files)} resumes...",
-                foreground="#f39c12"))
+                
+        resumes_text = "\n\n".join(full_text)
+        
+        # Update UI on main thread
+        self.root.after(0, lambda: self.on_resumes_loaded(len(pdf_files)))
+        
+        # Automatically transition to chatbot UI if on welcome page
+        
 
         resumes_text = "\n\n".join(full_text)
-        self.root.after(0, self.on_resumes_loaded)
+        #self.root.after(0, self.on_resumes_loaded)
 
-    def on_resumes_loaded(self):
+    def on_resumes_loaded(self, count):
+        """Update UI after resumes are processed"""
+        self.resumes_loaded = True
         self.is_processing = False
-        self.load_btn.config(state="normal")
-        self.user_input.config(state="normal")
-        self.send_btn.config(state="normal")
         
-        self.status_label.config(text=f"✅ Loaded {len(self.resume_map)} resumes.", foreground="#2ecc71")
+        # Enable input fields if they exist
+        if hasattr(self, 'user_input'):
+            self.user_input.config(state="normal")
+        if hasattr(self, 'send_btn'):
+            self.send_btn.config(state="normal")
         
-        # Clear chat area and show welcome message
-        self.chat_area.config(state="normal")
-        self.chat_area.delete("1.0", tk.END)
-        self.chat_area.config(state="disabled")
+        # Update status if it exists
+        if hasattr(self, 'status_label'):
+            self.status_label.config(text=f"✅ Loaded {count} resumes.", foreground="#2ecc71")
         
-        self.append_message("🤖 Bot", "Hello! I'm your resume assistant. Ask me things like:\n\n"
-                                      "• Who knows Python?\n"
-                                      "• Show me candidates with AWS experience\n"
-                                      "• Rank these candidates for a Data Scientist role\n"
-                                      "• Which candidate has the most relevant experience?\n"
-                                      "• Give me John's resume (to open the PDF file)")
+        # Update resumes status label if in chatbot UI
+        if hasattr(self, 'resumes_status'):
+            self.resumes_status.config(text=f"Resumes loaded: {count}")
+        
+        # Show success message
+        messagebox.showinfo("Success", f"{count} resumes loaded successfully!")
+        
+        # Only show welcome message if chat area exists (we're in chatbot UI)
+        if hasattr(self, 'chat_area'):
+            self.chat_area.config(state="normal")
+            self.chat_area.delete("1.0", tk.END)
+            self.chat_area.insert(tk.END, "Welcome to ScreenX! You can now ask questions about the loaded resumes.\n\n", "system")
+            self.chat_area.config(state="disabled")
+            
+            # Only append the welcome message if we're in chatbot UI
+            self.append_message("🤖 Bot", "Hello! I'm your resume assistant. Ask me things like:\n\n"
+                                        "• Who knows Python?\n"
+                                        "• Show me candidates with AWS experience\n"
+                                        "• Rank these candidates for a Data Scientist role\n"
+                                        "• Which candidate has the most relevant experience?\n"
+                                        "• Give me John's resume (to open the PDF file)")
 
     def send_question(self):
         question = self.user_input.get().strip()

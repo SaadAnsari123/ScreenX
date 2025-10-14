@@ -92,7 +92,7 @@ def query_ollama_local_fallback(prompt: str, callback):
         # Run ollama generate --stream with optimized parameters
         cmd = [
             "ollama", "generate",
-            "--model", OLLAMA_MODEL,
+            "--model", "llama3.2",
             "--prompt", prompt,
             "--stream",
             "--options", '{"num_ctx": 2048, "temperature": 0.7, "top_p": 0.9, "num_predict": 256}'
@@ -161,6 +161,11 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-8
     return float(np.dot(a, b) / denom)
 
+# ADD THESE NEW IMPORTS AT THE TOP
+from collaboration_client import CollaborationClient
+import collaboration_server
+from shared_database import shared_db  # NEW: Import the shared database
+
 class ResumeChatbotApp:
     KNOWN_SKILLS = {
         "python","java","javascript","typescript","c","c++","go","rust",
@@ -177,6 +182,14 @@ class ResumeChatbotApp:
         self.is_processing = False
         self.resume_map = {}
         self.current_frame = None
+        
+        # ADD COLLABORATION CLIENT INITIALIZATION
+        self.collaboration_client = CollaborationClient()
+        self.collaboration_enabled = False
+        
+        # NEW: Database update thread
+        self.db_update_thread = None
+        self.db_running = False
         
         # Theme settings
         self.theme_mode = "light"  # Default theme
@@ -264,13 +277,13 @@ class ResumeChatbotApp:
         theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
         theme_text = f"{theme_icon} {self.theme_mode.capitalize()} Mode"
         
-        theme_btn = ttk.Button(
+        self.theme_btn = ttk.Button(  # Store as instance variable
             theme_frame,
             text=theme_text,
             command=self.toggle_theme,
             style="Toggle.TButton"
         )
-        theme_btn.pack(side=tk.RIGHT, padx=5)
+        self.theme_btn.pack(side=tk.RIGHT, padx=5)
         
         # Welcome header with animation effect
         header_frame = ttk.Frame(welcome_frame, style="TFrame")
@@ -313,6 +326,24 @@ class ResumeChatbotApp:
         )
         chatbot_button.pack(pady=20)
         
+        # Team Collaboration button
+        collaboration_button = ttk.Button(
+            button_frame,
+            text="Team Collaboration",
+            command=self.toggle_collaboration,
+            style="Start.TButton"
+        )
+        collaboration_button.pack(pady=20)
+        
+        # NEW: View Candidate Pool button
+        candidate_pool_button = ttk.Button(
+            button_frame,
+            text="View Candidate Pool",
+            command=self.show_candidate_pool,
+            style="Start.TButton"
+        )
+        candidate_pool_button.pack(pady=20)
+        
         # Start button
         button_frame = ttk.Frame(welcome_frame, style="TFrame")
         button_frame.pack(fill=tk.X, pady=30)
@@ -345,7 +376,7 @@ class ResumeChatbotApp:
             welcome_frame.after(800, pulse_button)
             
         pulse_button()
-        
+
     def toggle_theme(self):
         """Toggle between light and dark mode"""
         # Toggle theme
@@ -355,13 +386,445 @@ class ResumeChatbotApp:
         # Update styles without recreating the UI
         self.setup_styles()
         
-        # Update theme button text
+        # Update theme button text if it exists
         if hasattr(self, 'theme_btn'):
             theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
             self.theme_btn.configure(text=f"{theme_icon} {self.theme_mode.capitalize()}")
             
         # Apply theme to root window
         self.root.configure(bg=self.bg_color)
+        
+        # If we're in candidate pool view, refresh it to apply theme
+        if hasattr(self, 'candidate_tree') and self.current_frame:
+            self.refresh_candidate_pool()
+
+    # ADD THESE NEW METHODS FOR CANDIDATE POOL FUNCTIONALITY
+
+    def show_candidate_pool(self):
+        """Show the candidate pool with real-time updates"""
+        # Clear previous frame if exists
+        if self.current_frame:
+            self.current_frame.destroy()
+            
+        # Create candidate pool frame
+        pool_frame = ttk.Frame(self.root, padding="20", style="TFrame")
+        pool_frame.pack(fill=tk.BOTH, expand=True)
+        self.current_frame = pool_frame
+        
+        # Header
+        header_frame = ttk.Frame(pool_frame, style="TFrame")
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        ttk.Label(
+            header_frame,
+            text="📊 Live Candidate Pool",
+            style="Header.TLabel",
+            foreground=self.accent_color
+        ).pack(side=tk.LEFT)
+        
+        # Back button
+        back_btn = ttk.Button(
+            header_frame,
+            text="← Back to Welcome",
+            command=self.show_welcome_page,
+            style="TButton"
+        )
+        back_btn.pack(side=tk.RIGHT)
+        
+        # Stats frame
+        stats_frame = ttk.Frame(pool_frame, style="TFrame")
+        stats_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        self.stats_label = ttk.Label(
+            stats_frame,
+            text="Loading statistics...",
+            style="Subheader.TLabel"
+        )
+        self.stats_label.pack(anchor="w")
+        
+        # Search frame
+        search_frame = ttk.Frame(pool_frame, style="TFrame")
+        search_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(
+            search_frame,
+            text="Search:",
+            style="TLabel"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.search_var = tk.StringVar()
+        search_entry = ttk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            width=30
+        )
+        search_entry.pack(side=tk.LEFT, padx=(0, 10))
+        search_entry.bind('<KeyRelease>', self.search_candidates)
+        
+        refresh_btn = ttk.Button(
+            search_frame,
+            text="Refresh",
+            command=self.refresh_candidate_pool,
+            style="TButton"
+        )
+        refresh_btn.pack(side=tk.LEFT)
+        
+        # Candidate list frame
+        list_frame = ttk.Frame(pool_frame, style="TFrame")
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        
+        # Create treeview for candidates
+        columns = ("Name", "Email", "Skills", "Last Updated")
+        self.candidate_tree = ttk.Treeview(
+            list_frame,
+            columns=columns,
+            show="headings",
+            height=15
+        )
+        
+        # Configure columns
+        self.candidate_tree.heading("Name", text="Name")
+        self.candidate_tree.heading("Email", text="Email")
+        self.candidate_tree.heading("Skills", text="Skills")
+        self.candidate_tree.heading("Last Updated", text="Last Updated")
+        
+        self.candidate_tree.column("Name", width=200)
+        self.candidate_tree.column("Email", width=200)
+        self.candidate_tree.column("Skills", width=300)
+        self.candidate_tree.column("Last Updated", width=150)
+        
+        # Scrollbar for treeview
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.candidate_tree.yview)
+        self.candidate_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.candidate_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Double-click to view details
+        self.candidate_tree.bind("<Double-1>", self.show_candidate_details)
+        
+        # Start real-time updates
+        self.start_db_updates()
+        
+        # Load initial data
+        self.refresh_candidate_pool()
+    
+    def refresh_candidate_pool(self):
+        """Refresh the candidate pool display"""
+        try:
+            # Get all resumes from database
+            resumes = shared_db.get_all_resumes()
+            stats = shared_db.get_stats()
+            
+            # Update stats
+            self.stats_label.config(
+                text=f"Total Candidates: {stats['total_resumes']} | "
+                     f"Last Update: {stats['last_update'] or 'Never'}"
+            )
+            
+            # Clear existing items
+            for item in self.candidate_tree.get_children():
+                self.candidate_tree.delete(item)
+            
+            # Add resumes to treeview
+            for resume in resumes:
+                skills = resume.get('skills', '')[:100] + "..." if len(resume.get('skills', '')) > 100 else resume.get('skills', '')
+                last_updated = resume.get('updated_at', '')[:16] if resume.get('updated_at') else 'Unknown'
+                
+                self.candidate_tree.insert(
+                    "", "end",
+                    values=(
+                        resume['name'],
+                        resume.get('email', ''),
+                        skills,
+                        last_updated
+                    )
+                )
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh candidate pool: {e}")
+    
+    def search_candidates(self, event=None):
+        """Search candidates based on query"""
+        query = self.search_var.get().strip()
+        if not query:
+            self.refresh_candidate_pool()
+            return
+            
+        try:
+            results = shared_db.search_resumes(query)
+            
+            # Clear existing items
+            for item in self.candidate_tree.get_children():
+                self.candidate_tree.delete(item)
+            
+            # Add search results
+            for resume in results:
+                skills = resume.get('skills', '')[:100] + "..." if len(resume.get('skills', '')) > 100 else resume.get('skills', '')
+                
+                self.candidate_tree.insert(
+                    "", "end",
+                    values=(
+                        resume['name'],
+                        resume.get('email', ''),
+                        skills,
+                        "Search Result"
+                    )
+                )
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Search failed: {e}")
+    
+    def show_candidate_details(self, event):
+        """Show detailed view of selected candidate"""
+        selection = self.candidate_tree.selection()
+        if not selection:
+            return
+            
+        item = self.candidate_tree.item(selection[0])
+        candidate_name = item['values'][0]
+        
+        # Find the resume in database
+        resumes = shared_db.search_resumes(candidate_name)
+        if not resumes:
+            messagebox.showinfo("Not Found", f"Details not found for {candidate_name}")
+            return
+            
+        resume = resumes[0]
+        
+        # Create details window
+        details_window = tk.Toplevel(self.root)
+        details_window.title(f"Candidate Details - {candidate_name}")
+        details_window.geometry("600x400")
+        details_window.transient(self.root)
+        details_window.grab_set()
+        
+        # Details content
+        content_frame = ttk.Frame(details_window, padding="20")
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Candidate information
+        info_text = f"""
+Name: {resume['name']}
+Email: {resume.get('email', 'Not provided')}
+Phone: {resume.get('phone', 'Not provided')}
+
+Skills:
+{resume.get('skills', 'Not extracted')}
+
+Experience:
+{resume.get('experience', 'Not extracted')}
+
+Education:
+{resume.get('education', 'Not extracted')}
+
+PDF Path: {resume.get('pdf_path', 'Not available')}
+        """
+        
+        details_text = scrolledtext.ScrolledText(
+            content_frame,
+            wrap=tk.WORD,
+            font=("Arial", 11),
+            height=20
+        )
+        details_text.insert("1.0", info_text)
+        details_text.config(state="disabled")
+        details_text.pack(fill=tk.BOTH, expand=True)
+    
+    def start_db_updates(self):
+        """Start real-time database updates"""
+        if not self.db_running:
+            self.db_running = True
+            self.db_update_thread = threading.Thread(target=self._db_update_worker, daemon=True)
+            self.db_update_thread.start()
+    
+    def stop_db_updates(self):
+        """Stop real-time database updates"""
+        self.db_running = False
+    
+    def _db_update_worker(self):
+        """Worker thread for real-time database updates"""
+        last_count = 0
+        while self.db_running:
+            try:
+                current_stats = shared_db.get_stats()
+                current_count = current_stats['total_resumes']
+                
+                # Refresh if count changed
+                if current_count != last_count:
+                    self.root.after(0, self.refresh_candidate_pool)
+                    last_count = current_count
+                
+                time.sleep(2)  # Check every 2 seconds
+                
+            except Exception as e:
+                print(f"Database update error: {e}")
+                time.sleep(5)
+
+    def extract_skills_from_text(self, text):
+        """Extract skills from resume text"""
+        skills_found = []
+        for skill in self.KNOWN_SKILLS:
+            if skill.lower() in text.lower():
+                skills_found.append(skill)
+        return ", ".join(skills_found) if skills_found else "Not detected"
+    
+    def extract_experience_from_text(self, text):
+        """Extract experience information from resume text"""
+        # Simple extraction - you can enhance this
+        lines = text.split('\n')
+        experience_lines = []
+        for line in lines:
+            if any(keyword in line.lower() for keyword in ['experience', 'work', 'job', 'position']):
+                experience_lines.append(line.strip())
+        return "\n".join(experience_lines[:5]) if experience_lines else "Not detected"
+    
+    def extract_education_from_text(self, text):
+        """Extract education information from resume text"""
+        # Simple extraction - you can enhance this
+        lines = text.split('\n')
+        education_lines = []
+        for line in lines:
+            if any(keyword in line.lower() for keyword in ['education', 'university', 'college', 'degree', 'bachelor', 'master', 'phd']):
+                education_lines.append(line.strip())
+        return "\n".join(education_lines[:5]) if education_lines else "Not detected"
+
+    # MODIFY THE _process_resumes METHOD TO UPDATE DATABASE
+
+    def _process_resumes(self, pdf_files):
+        global resumes_text, candidate_names
+        full_text = []
+        candidate_names = []
+        self.resume_map = {}
+        self.pdf_paths = {}  # Store paths to original PDF files
+        self.resume_data = []  # Initialize resume data list
+
+        for i, pdf in enumerate(pdf_files):
+            try:
+                text = extract_text_from_pdf(str(pdf))
+                name = text.splitlines()[0].strip() if text else pdf.stem
+                candidate_names.append(name)
+                self.resume_map[name] = text
+                self.pdf_paths[name] = str(pdf)  # Store the path to the PDF file
+                self.resume_data.append({"name": name, "path": str(pdf)})  # Add to resume data
+                full_text.append(f"--- Resume: {name} ({pdf.name}) ---\n{text}")
+                
+                # NEW: Update shared database
+                resume_data = {
+                    'name': name,
+                    'raw_text': text,
+                    'pdf_path': str(pdf),
+                    'skills': self.extract_skills_from_text(text),
+                    'experience': self.extract_experience_from_text(text),
+                    'education': self.extract_education_from_text(text)
+                }
+                shared_db.add_or_update_resume(resume_data)
+                
+            except Exception as e:
+                full_text.append(f"[Error reading {pdf.name}: {e}]")
+                
+        resumes_text = "\n\n".join(full_text)
+        
+        # Share resume data via collaboration if enabled
+        if self.collaboration_enabled:
+            self.share_resume_data()
+        
+        # Update UI on main thread
+        self.root.after(0, lambda: self.on_resumes_loaded(len(pdf_files)))
+
+    # MODIFY THE apply_collaboration_update METHOD TO UPDATE DATABASE
+
+    def apply_collaboration_update(self, resume_data):
+        """Apply received resume data update"""
+        if not resume_data:
+            return
+            
+        # Update local resume data structures
+        self.resume_map = resume_data.get('resume_map', {})
+        self.pdf_paths = resume_data.get('pdf_paths', {})
+        
+        # NEW: Also update the shared database
+        for name, text in self.resume_map.items():
+            resume_db_data = {
+                'name': name,
+                'raw_text': text,
+                'pdf_path': self.pdf_paths.get(name, ''),
+                'skills': self.extract_skills_from_text(text),
+                'experience': self.extract_experience_from_text(text),
+                'education': self.extract_education_from_text(text)
+            }
+            shared_db.add_or_update_resume(resume_db_data)
+        
+        # Update the UI to reflect new data
+        if hasattr(self, 'resumes_status'):
+            count = len(self.resume_map)
+            self.resumes_status.config(text=f"Resumes loaded: {count}")
+            
+        if hasattr(self, 'status_label'):
+            self.status_label.config(text=f"✅ Updated {count} resumes via collaboration.", foreground="#2ecc71")
+        
+        # Refresh chat area if in chatbot UI
+        if hasattr(self, 'chat_area'):
+            self.chat_area.config(state="normal")
+            self.chat_area.delete("1.0", tk.END)
+            self.chat_area.insert(tk.END, "Resume data updated via team collaboration.\n\n", "system")
+            self.chat_area.config(state="disabled")
+            
+        self.resumes_loaded = bool(self.resume_map)
+
+    # EXISTING COLLABORATION METHODS (keep these as before)
+    
+    def toggle_collaboration(self):
+        """Toggle team collaboration on/off"""
+        if not self.collaboration_enabled:
+            self.enable_collaboration()
+        else:
+            self.disable_collaboration()
+    
+    def enable_collaboration(self):
+        """Enable team collaboration features"""
+        # Start local server if not already running
+        collaboration_server.start_collaboration_server()
+        
+        # Connect client to server
+        if self.collaboration_client.connect():
+            self.collaboration_client.set_callback(self.handle_collaboration_update)
+            self.collaboration_enabled = True
+            messagebox.showinfo("Team Collaboration", "Collaboration enabled! Team members can now see resume updates in real-time.")
+            
+            # Share current resume data if available
+            if hasattr(self, 'resume_map') and self.resume_map:
+                self.share_resume_data()
+        else:
+            messagebox.showerror("Team Collaboration", "Failed to start collaboration service. Make sure port 8888 is available.")
+    
+    def disable_collaboration(self):
+        """Disable team collaboration features"""
+        self.collaboration_enabled = False
+        self.collaboration_client.disconnect()
+        messagebox.showinfo("Team Collaboration", "Collaboration disabled.")
+    
+    def handle_collaboration_update(self, update_type, data):
+        """Handle incoming collaboration updates"""
+        if update_type == 'update' and data:
+            # Update local resume data with received data
+            self.root.after(0, lambda: self.apply_collaboration_update(data))
+        elif update_type == 'sync' and data:
+            # Sync with server data
+            self.root.after(0, lambda: self.apply_collaboration_update(data))
+    
+    def share_resume_data(self):
+        """Share current resume data with team"""
+        if not self.collaboration_enabled or not hasattr(self, 'resume_map'):
+            return
+            
+        resume_data = {
+            'resume_map': self.resume_map,
+            'pdf_paths': getattr(self, 'pdf_paths', {}),
+            'timestamp': time.time()
+        }
+        
+        self.collaboration_client.send_update(resume_data)
         
     def transition_to_chatbot(self):
         """Smooth transition from welcome page to chatbot UI"""
@@ -473,13 +936,13 @@ class ResumeChatbotApp:
         
         # Theme toggle in sidebar
         theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
-        theme_btn = ttk.Button(
+        self.theme_btn = ttk.Button(  # Store as instance variable
             sidebar,
             text=f"{theme_icon} {self.theme_mode.capitalize()}",
             command=self.toggle_theme,
             style="Toggle.TButton"
         )
-        theme_btn.pack(fill=tk.X, padx=15, pady=(5, 20))
+        self.theme_btn.pack(fill=tk.X, padx=15, pady=(5, 20))
         
         # Load resumes button in sidebar
         resume_count = len(self.resume_map) if hasattr(self, 'resume_map') and self.resume_map else 0
@@ -657,37 +1120,6 @@ class ResumeChatbotApp:
             
             # Schedule next animation frame
             self.root.after(500, self.show_loading_animation)
-
-    def _process_resumes(self, pdf_files):
-        global resumes_text, candidate_names
-        full_text = []
-        candidate_names = []
-        self.resume_map = {}
-        self.pdf_paths = {}  # Store paths to original PDF files
-        self.resume_data = []  # Initialize resume data list
-
-        for i, pdf in enumerate(pdf_files):
-            try:
-                text = extract_text_from_pdf(str(pdf))
-                name = text.splitlines()[0].strip() if text else pdf.stem
-                candidate_names.append(name)
-                self.resume_map[name] = text
-                self.pdf_paths[name] = str(pdf)  # Store the path to the PDF file
-                self.resume_data.append({"name": name, "path": str(pdf)})  # Add to resume data
-                full_text.append(f"--- Resume: {name} ({pdf.name}) ---\n{text}")
-            except Exception as e:
-                full_text.append(f"[Error reading {pdf.name}: {e}]")
-                
-        resumes_text = "\n\n".join(full_text)
-        
-        # Update UI on main thread
-        self.root.after(0, lambda: self.on_resumes_loaded(len(pdf_files)))
-        
-        # Automatically transition to chatbot UI if on welcome page
-        
-
-        resumes_text = "\n\n".join(full_text)
-        #self.root.after(0, self.on_resumes_loaded)
 
     def on_resumes_loaded(self, count):
         """Update UI after resumes are processed"""

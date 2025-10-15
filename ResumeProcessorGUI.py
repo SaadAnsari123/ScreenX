@@ -14,6 +14,16 @@ import os
 from PIL import Image, ImageTk
 import time
 import json
+import sys
+
+# Add CustomTkinter path to system path
+sys.path.append(os.path.join(os.path.dirname(__file__), "uilearn"))
+try:
+    from CustomTkinter.customtkinter import CTk, CTkFrame, CTkButton, CTkLabel, CTkEntry, CTkScrollableFrame, CTkTextbox
+    from CustomTkinter.customtkinter import set_appearance_mode, set_default_color_theme
+    CUSTOM_TKINTER_AVAILABLE = True
+except ImportError:
+    CUSTOM_TKINTER_AVAILABLE = False
 
 OLLAMA_EMBED_MODEL = "nomic-embed-text"  # Must be pulled: ollama pull nomic-embed-text
 OLLAMA_HTTP_URL = "http://localhost:11434/api/generate"   # Default Ollama port (not 8080!)
@@ -179,6 +189,8 @@ class ResumeChatbotApp:
         self.root = root
         self.root.title("ScreenX - AI Resume Screening")
         self.root.geometry("1000x700")
+        # Prevent window resizing
+        self.root.resizable(False, False)
         self.is_processing = False
         self.resume_map = {}
         self.current_frame = None
@@ -224,30 +236,35 @@ class ResumeChatbotApp:
     def setup_styles(self):
         style = ttk.Style()
         
-        # Define theme colors
+        # Define theme colors with improved contrast
         if self.theme_mode == "dark":
             self.bg_color = "#1e1e2e"  # Dark background
             self.chat_bg = "#2d2d3f"   # Slightly lighter for chat area
             self.accent_color = "#7289da"  # Discord-like accent
-            self.text_color = "#e0e0e0"  # Light text
+            self.text_color = "#ffffff"  # Brighter text for better contrast
             self.highlight_color = "#5ccc8f"  # Green highlight
             self.secondary_bg = "#292938"  # Secondary background
             self.input_bg = "#383850"  # Input background
             self.user_msg_bg = "#444b5d"  # User message background
-            self.bot_msg_bg = "#2d2d3f"  # Bot message background
+            self.bot_msg_bg = "#323248"  # Darker bot message background for better contrast
         else:
             self.bg_color = "#f5f5f5"  # Light background
             self.chat_bg = "#ffffff"   # White for chat area
-            self.accent_color = "#3498db"  # Blue accent
-            self.text_color = "#2c3e50"  # Dark text
-            self.highlight_color = "#2ecc71"  # Green highlight
+            self.accent_color = "#2980b9"  # Darker blue accent for better contrast
+            self.text_color = "#1a1a1a"  # Darker text for better contrast
+            self.highlight_color = "#27ae60"  # Darker green highlight
             self.secondary_bg = "#e9ecef"  # Secondary background
             self.input_bg = "#ffffff"  # Input background
-            self.user_msg_bg = "#e9f5fe"  # Light blue for user messages
-            self.bot_msg_bg = "#f8f9fa"  # Light gray for bot messages
+            self.user_msg_bg = "#d4e6f1"  # Darker blue for user messages (better contrast)
+            self.bot_msg_bg = "#eaecee"  # Slightly darker gray for bot messages
         
         # Configure styles
         style.configure("Header.TLabel", font=("Arial", 18, "bold"), foreground=self.text_color, background=self.bg_color)
+        
+        # Set CustomTkinter appearance mode if available
+        if CUSTOM_TKINTER_AVAILABLE:
+            set_appearance_mode("dark" if self.theme_mode == "dark" else "light")
+            set_default_color_theme("blue")
         style.configure("Subheader.TLabel", font=("Arial", 14), foreground=self.text_color, background=self.bg_color)
         style.configure("TButton", font=("Arial", 12), padding=10)
         style.configure("Start.TButton", font=("Arial", 14, "bold"), padding=15)
@@ -265,117 +282,350 @@ class ResumeChatbotApp:
         if self.current_frame:
             self.current_frame.destroy()
             
-        # Create welcome frame
-        welcome_frame = ttk.Frame(self.root, padding="30", style="TFrame")
-        welcome_frame.pack(fill=tk.BOTH, expand=True)
-        self.current_frame = welcome_frame
-        
-        # Theme toggle button
-        theme_frame = ttk.Frame(welcome_frame, style="TFrame")
-        theme_frame.pack(fill=tk.X, anchor="ne", pady=(0, 10))
-        
-        theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
-        theme_text = f"{theme_icon} {self.theme_mode.capitalize()} Mode"
-        
-        self.theme_btn = ttk.Button(  # Store as instance variable
-            theme_frame,
-            text=theme_text,
-            command=self.toggle_theme,
-            style="Toggle.TButton"
-        )
-        self.theme_btn.pack(side=tk.RIGHT, padx=5)
-        
-        # Welcome header with animation effect
-        header_frame = ttk.Frame(welcome_frame, style="TFrame")
-        header_frame.pack(fill=tk.X, pady=(20, 30))
-        
-        title_label = ttk.Label(
-            header_frame, 
-            text="Welcome to ScreenX", 
-            style="Header.TLabel",
-            foreground=self.accent_color
-        )
-        title_label.pack(pady=(0, 10))
-        
-        subtitle_label = ttk.Label(
-            header_frame,
-            text="AI-Powered Resume Screening Platform",
-            style="Subheader.TLabel"
-        )
-        subtitle_label.pack()
-        
-        # Buttons frame
-        button_frame = ttk.Frame(welcome_frame, style="TFrame")
-        button_frame.pack(fill=tk.X, pady=30)
-        
-        # Load Resume button
-        load_button = ttk.Button(
-            button_frame,
-            text="Load Resumes",
-            command=self.load_resumes,
-            style="Start.TButton"
-        )
-        load_button.pack(pady=20)
-        
-        # Chatbot button
-        chatbot_button = ttk.Button(
-            button_frame,
-            text="Open Chatbot",
-            command=self.transition_to_chatbot,
-            style="Start.TButton"
-        )
-        chatbot_button.pack(pady=20)
-        
-        # Team Collaboration button
-        collaboration_button = ttk.Button(
-            button_frame,
-            text="Team Collaboration",
-            command=self.toggle_collaboration,
-            style="Start.TButton"
-        )
-        collaboration_button.pack(pady=20)
-        
-        # NEW: View Candidate Pool button
-        candidate_pool_button = ttk.Button(
-            button_frame,
-            text="View Candidate Pool",
-            command=self.show_candidate_pool,
-            style="Start.TButton"
-        )
-        candidate_pool_button.pack(pady=20)
-        
-        # Start button
-        button_frame = ttk.Frame(welcome_frame, style="TFrame")
-        button_frame.pack(fill=tk.X, pady=30)
-        
-        start_button = ttk.Button(
-            button_frame,
-            text="Get Started",
-            command=self.transition_to_chatbot,
-            style="Start.TButton"
-        )
-        start_button.pack(pady=10)
-        
-        # Add animation to the start button
-        def pulse_button():
-            try:
-                padding = start_button.cget("padding")
-                if isinstance(padding, str) and padding:
-                    current_padding = int(padding.split()[0])
-                else:
-                    current_padding = 10
-                    
-                if current_padding == 10:
-                    start_button.configure(padding=12)
-                else:
-                    start_button.configure(padding=10)
-            except (ValueError, IndexError):
-                # Handle any errors with padding
-                pass
-                
-            welcome_frame.after(800, pulse_button)
+        # Create welcome frame with CustomTkinter if available
+        if CUSTOM_TKINTER_AVAILABLE:
+            # Set appearance mode based on current theme
+            set_appearance_mode("dark" if self.theme_mode == "dark" else "light")
+            set_default_color_theme("blue")
             
-        pulse_button()
+            welcome_frame = CTkFrame(self.root, corner_radius=0)
+            welcome_frame.pack(fill=tk.BOTH, expand=True)
+            self.current_frame = welcome_frame
+            
+            # Theme toggle button
+            theme_frame = CTkFrame(welcome_frame, fg_color="transparent")
+            theme_frame.pack(fill=tk.X, anchor="ne", pady=(10, 0), padx=20)
+            
+            theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
+            
+            self.theme_btn = CTkButton(
+                theme_frame,
+                text=f"{theme_icon} {self.theme_mode.capitalize()} Mode",
+                command=self.toggle_theme,
+                fg_color=self.accent_color,
+                hover_color="#2980b9" if self.theme_mode == "light" else "#5865f2",
+                corner_radius=8,
+                width=120,
+                height=32
+            )
+            self.theme_btn.pack(side=tk.RIGHT, padx=5)
+            
+            # Welcome header with animation effect
+            header_frame = CTkFrame(welcome_frame, fg_color="transparent")
+            header_frame.pack(fill=tk.X, pady=(30, 20), padx=40)
+            
+            # Logo/Icon
+            logo_label = CTkLabel(
+                header_frame,
+                text="📄",
+                font=("Arial", 48),
+                text_color=self.accent_color
+            )
+            logo_label.pack(pady=(0, 10))
+            
+            title_label = CTkLabel(
+                header_frame, 
+                text="Welcome to ScreenX", 
+                font=("Arial", 32, "bold"),
+                text_color=self.accent_color
+            )
+            title_label.pack(pady=(0, 10))
+            
+            subtitle_label = CTkLabel(
+                header_frame,
+                text="AI-Powered Resume Screening Platform",
+                font=("Arial", 18),
+                text_color=self.text_color
+            )
+            subtitle_label.pack()
+            
+            # Feature cards in a grid layout
+            features_frame = CTkFrame(welcome_frame, fg_color="transparent")
+            features_frame.pack(fill=tk.X, pady=30, padx=40)
+            
+            # Configure grid
+            features_frame.columnconfigure(0, weight=1)
+            features_frame.columnconfigure(1, weight=1)
+            features_frame.rowconfigure(0, weight=1)
+            features_frame.rowconfigure(1, weight=1)
+            
+            # Feature 1: Load Resumes
+            feature1 = CTkFrame(features_frame, corner_radius=10)
+            feature1.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+            
+            CTkLabel(
+                feature1, 
+                text="📁", 
+                font=("Arial", 24),
+                text_color=self.accent_color
+            ).pack(pady=(15, 5))
+            
+            CTkLabel(
+                feature1, 
+                text="Load Resumes", 
+                font=("Arial", 16, "bold"),
+                text_color=self.text_color
+            ).pack(pady=5)
+            
+            CTkLabel(
+                feature1, 
+                text="Import PDF resumes for AI analysis", 
+                font=("Arial", 12),
+                text_color=self.text_color
+            ).pack(pady=(0, 10))
+            
+            CTkButton(
+                feature1,
+                text="Upload Files",
+                command=self.load_resumes,
+                fg_color=self.accent_color,
+                hover_color="#2980b9" if self.theme_mode == "light" else "#5865f2",
+                corner_radius=8
+            ).pack(pady=(5, 15))
+            
+            # Feature 2: Chat with AI
+            feature2 = CTkFrame(features_frame, corner_radius=10)
+            feature2.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+            
+            CTkLabel(
+                feature2, 
+                text="💬", 
+                font=("Arial", 24),
+                text_color=self.accent_color
+            ).pack(pady=(15, 5))
+            
+            CTkLabel(
+                feature2, 
+                text="Chat with AI", 
+                font=("Arial", 16, "bold"),
+                text_color=self.text_color
+            ).pack(pady=5)
+            
+            CTkLabel(
+                feature2, 
+                text="Ask questions about candidate skills", 
+                font=("Arial", 12),
+                text_color=self.text_color
+            ).pack(pady=(0, 10))
+            
+            CTkButton(
+                feature2,
+                text="Open Chatbot",
+                command=self.transition_to_chatbot,
+                fg_color=self.accent_color,
+                hover_color="#2980b9" if self.theme_mode == "light" else "#5865f2",
+                corner_radius=8
+            ).pack(pady=(5, 15))
+            
+            # Feature 3: Team Collaboration
+            feature3 = CTkFrame(features_frame, corner_radius=10)
+            feature3.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+            
+            CTkLabel(
+                feature3, 
+                text="👥", 
+                font=("Arial", 24),
+                text_color=self.accent_color
+            ).pack(pady=(15, 5))
+            
+            CTkLabel(
+                feature3, 
+                text="Team Collaboration", 
+                font=("Arial", 16, "bold"),
+                text_color=self.text_color
+            ).pack(pady=5)
+            
+            CTkLabel(
+                feature3, 
+                text="Share insights with your team", 
+                font=("Arial", 12),
+                text_color=self.text_color
+            ).pack(pady=(0, 10))
+            
+            CTkButton(
+                feature3,
+                text="Collaborate",
+                command=self.toggle_collaboration,
+                fg_color=self.accent_color,
+                hover_color="#2980b9" if self.theme_mode == "light" else "#5865f2",
+                corner_radius=8
+            ).pack(pady=(5, 15))
+            
+            # Feature 4: Candidate Pool
+            feature4 = CTkFrame(features_frame, corner_radius=10)
+            feature4.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+            
+            CTkLabel(
+                feature4, 
+                text="👤", 
+                font=("Arial", 24),
+                text_color=self.accent_color
+            ).pack(pady=(15, 5))
+            
+            CTkLabel(
+                feature4, 
+                text="Candidate Pool", 
+                font=("Arial", 16, "bold"),
+                text_color=self.text_color
+            ).pack(pady=5)
+            
+            CTkLabel(
+                feature4, 
+                text="View and manage all candidates", 
+                font=("Arial", 12),
+                text_color=self.text_color
+            ).pack(pady=(0, 10))
+            
+            CTkButton(
+                feature4,
+                text="View Candidates",
+                command=self.show_candidate_pool,
+                fg_color=self.accent_color,
+                hover_color="#2980b9" if self.theme_mode == "light" else "#5865f2",
+                corner_radius=8
+            ).pack(pady=(5, 15))
+            
+            # Get Started button
+            start_button = CTkButton(
+                welcome_frame,
+                text="Get Started",
+                command=self.transition_to_chatbot,
+                fg_color=self.accent_color,
+                hover_color="#2980b9" if self.theme_mode == "light" else "#5865f2",
+                corner_radius=8,
+                font=("Arial", 16, "bold"),
+                height=50,
+                width=200
+            )
+            start_button.pack(pady=30)
+            
+            # Add animation to the start button
+            def pulse_button():
+                try:
+                    current_width = start_button.cget("width")
+                    if current_width == 200:
+                        start_button.configure(width=210)
+                    else:
+                        start_button.configure(width=200)
+                except:
+                    pass
+                    
+                welcome_frame.after(800, pulse_button)
+                
+            pulse_button()
+            
+        else:
+            # Fallback to ttk implementation
+            welcome_frame = ttk.Frame(self.root, padding="30", style="TFrame")
+            welcome_frame.pack(fill=tk.BOTH, expand=True)
+            self.current_frame = welcome_frame
+            
+            # Theme toggle button
+            theme_frame = ttk.Frame(welcome_frame, style="TFrame")
+            theme_frame.pack(fill=tk.X, anchor="ne", pady=(0, 10))
+            
+            theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
+            theme_text = f"{theme_icon} {self.theme_mode.capitalize()} Mode"
+            
+            self.theme_btn = ttk.Button(  # Store as instance variable
+                theme_frame,
+                text=theme_text,
+                command=self.toggle_theme,
+                style="Toggle.TButton"
+            )
+            self.theme_btn.pack(side=tk.RIGHT, padx=5)
+            
+            # Welcome header with animation effect
+            header_frame = ttk.Frame(welcome_frame, style="TFrame")
+            header_frame.pack(fill=tk.X, pady=(20, 30))
+            
+            title_label = ttk.Label(
+                header_frame, 
+                text="Welcome to ScreenX", 
+                style="Header.TLabel",
+                foreground=self.accent_color
+            )
+            title_label.pack(pady=(0, 10))
+            
+            subtitle_label = ttk.Label(
+                header_frame,
+                text="AI-Powered Resume Screening Platform",
+                style="Subheader.TLabel"
+            )
+            subtitle_label.pack()
+            
+            # Buttons frame
+            button_frame = ttk.Frame(welcome_frame, style="TFrame")
+            button_frame.pack(fill=tk.X, pady=30)
+            
+            # Load Resume button
+            load_button = ttk.Button(
+                button_frame,
+                text="Load Resumes",
+                command=self.load_resumes,
+                style="Start.TButton"
+            )
+            load_button.pack(pady=20)
+            
+            # Chatbot button
+            chatbot_button = ttk.Button(
+                button_frame,
+                text="Open Chatbot",
+                command=self.transition_to_chatbot,
+                style="Start.TButton"
+            )
+            chatbot_button.pack(pady=20)
+            
+            # Team Collaboration button
+            collaboration_button = ttk.Button(
+                button_frame,
+                text="Team Collaboration",
+                command=self.toggle_collaboration,
+                style="Start.TButton"
+            )
+            collaboration_button.pack(pady=20)
+            
+            # NEW: View Candidate Pool button
+            candidate_pool_button = ttk.Button(
+                button_frame,
+                text="View Candidate Pool",
+                command=self.show_candidate_pool,
+                style="Start.TButton"
+            )
+            candidate_pool_button.pack(pady=20)
+            
+            # Start button
+            button_frame = ttk.Frame(welcome_frame, style="TFrame")
+            button_frame.pack(fill=tk.X, pady=30)
+            
+            start_button = ttk.Button(
+                button_frame,
+                text="Get Started",
+                command=self.transition_to_chatbot,
+                style="Start.TButton"
+            )
+            start_button.pack(pady=10)
+            
+            # Add animation to the start button
+            def pulse_button():
+                try:
+                    padding = start_button.cget("padding")
+                    if isinstance(padding, str) and padding:
+                        current_padding = int(padding.split()[0])
+                    else:
+                        current_padding = 10
+                        
+                    if current_padding == 10:
+                        start_button.configure(padding=12)
+                    else:
+                        start_button.configure(padding=10)
+                except (ValueError, IndexError):
+                    # Handle any errors with padding
+                    pass
+                    
+                welcome_frame.after(800, pulse_button)
+                
+            pulse_button()
 
     def toggle_theme(self):
         """Toggle between light and dark mode"""
@@ -389,7 +639,12 @@ class ResumeChatbotApp:
         # Update theme button text if it exists
         if hasattr(self, 'theme_btn'):
             theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
-            self.theme_btn.configure(text=f"{theme_icon} {self.theme_mode.capitalize()}")
+            if CUSTOM_TKINTER_AVAILABLE and isinstance(self.theme_btn, CTkButton):
+                self.theme_btn.configure(text=f"{theme_icon} {self.theme_mode.capitalize()}")
+                # Update CustomTkinter appearance mode
+                set_appearance_mode("dark" if self.theme_mode == "dark" else "light")
+            else:
+                self.theme_btn.configure(text=f"{theme_icon} {self.theme_mode.capitalize()}")
             
         # Apply theme to root window
         self.root.configure(bg=self.bg_color)
@@ -406,108 +661,221 @@ class ResumeChatbotApp:
         if self.current_frame:
             self.current_frame.destroy()
             
-        # Create candidate pool frame
-        pool_frame = ttk.Frame(self.root, padding="20", style="TFrame")
-        pool_frame.pack(fill=tk.BOTH, expand=True)
-        self.current_frame = pool_frame
-        
-        # Header
-        header_frame = ttk.Frame(pool_frame, style="TFrame")
-        header_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        ttk.Label(
-            header_frame,
-            text="📊 Live Candidate Pool",
-            style="Header.TLabel",
-            foreground=self.accent_color
-        ).pack(side=tk.LEFT)
-        
-        # Back button
-        back_btn = ttk.Button(
-            header_frame,
-            text="← Back to Welcome",
-            command=self.show_welcome_page,
-            style="TButton"
-        )
-        back_btn.pack(side=tk.RIGHT)
-        
-        # Stats frame
-        stats_frame = ttk.Frame(pool_frame, style="TFrame")
-        stats_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        self.stats_label = ttk.Label(
-            stats_frame,
-            text="Loading statistics...",
-            style="Subheader.TLabel"
-        )
-        self.stats_label.pack(anchor="w")
-        
-        # Search frame
-        search_frame = ttk.Frame(pool_frame, style="TFrame")
-        search_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(
-            search_frame,
-            text="Search:",
-            style="TLabel"
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(
-            search_frame,
-            textvariable=self.search_var,
-            width=30
-        )
-        search_entry.pack(side=tk.LEFT, padx=(0, 10))
-        search_entry.bind('<KeyRelease>', self.search_candidates)
-        
-        refresh_btn = ttk.Button(
-            search_frame,
-            text="Refresh",
-            command=self.refresh_candidate_pool,
-            style="TButton"
-        )
-        refresh_btn.pack(side=tk.LEFT)
-        
-        # Candidate list frame
-        list_frame = ttk.Frame(pool_frame, style="TFrame")
-        list_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
-        
-        # Create treeview for candidates
-        columns = ("Name", "Email", "Skills", "Last Updated")
-        self.candidate_tree = ttk.Treeview(
-            list_frame,
-            columns=columns,
-            show="headings",
-            height=15
-        )
-        
-        # Configure columns
-        self.candidate_tree.heading("Name", text="Name")
-        self.candidate_tree.heading("Email", text="Email")
-        self.candidate_tree.heading("Skills", text="Skills")
-        self.candidate_tree.heading("Last Updated", text="Last Updated")
-        
-        self.candidate_tree.column("Name", width=200)
-        self.candidate_tree.column("Email", width=200)
-        self.candidate_tree.column("Skills", width=300)
-        self.candidate_tree.column("Last Updated", width=150)
-        
-        # Scrollbar for treeview
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.candidate_tree.yview)
-        self.candidate_tree.configure(yscrollcommand=scrollbar.set)
-        
-        self.candidate_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Double-click to view details
-        self.candidate_tree.bind("<Double-1>", self.show_candidate_details)
-        
-        # Start real-time updates
-        self.start_db_updates()
-        
-        # Load initial data
-        self.refresh_candidate_pool()
+        # Use CustomTkinter if available, otherwise fallback to ttk
+        if CUSTOM_TKINTER_AVAILABLE:
+            # Set appearance mode based on current theme
+            set_appearance_mode("dark" if self.theme_mode == "dark" else "light")
+            set_default_color_theme("blue")
+            
+            # Create candidate pool frame
+            pool_frame = CTkFrame(self.root, corner_radius=0)
+            pool_frame.pack(fill=tk.BOTH, expand=True)
+            self.current_frame = pool_frame
+            
+            # Header
+            header_frame = CTkFrame(pool_frame, fg_color="transparent")
+            header_frame.pack(fill=tk.X, pady=(20, 20), padx=20)
+            
+            CTkLabel(
+                header_frame,
+                text="📊 Live Candidate Pool",
+                font=("Arial", 20, "bold"),
+                text_color=self.accent_color
+            ).pack(side=tk.LEFT)
+            
+            # Back button
+            back_btn = CTkButton(
+                header_frame,
+                text="← Back to Welcome",
+                command=self.show_welcome_page,
+                fg_color="transparent",
+                hover_color="#2c3e50",
+                border_width=1,
+                border_color="#95a5a6",
+                corner_radius=8
+            )
+            back_btn.pack(side=tk.RIGHT)
+            
+            # Stats frame
+            stats_frame = CTkFrame(pool_frame, fg_color="transparent")
+            stats_frame.pack(fill=tk.X, pady=(0, 20), padx=20)
+            
+            self.stats_label = CTkLabel(
+                stats_frame,
+                text="Loading statistics...",
+                font=("Arial", 14)
+            )
+            self.stats_label.pack(anchor="w")
+            
+            # Search frame
+            search_frame = CTkFrame(pool_frame, fg_color="transparent")
+            search_frame.pack(fill=tk.X, pady=(0, 10), padx=20)
+            
+            CTkLabel(
+                search_frame,
+                text="Search:",
+                font=("Arial", 12)
+            ).pack(side=tk.LEFT, padx=(0, 10))
+            
+            self.search_var = tk.StringVar()
+            search_entry = CTkEntry(
+                search_frame,
+                textvariable=self.search_var,
+                width=250,
+                height=32,
+                corner_radius=8
+            )
+            search_entry.pack(side=tk.LEFT, padx=(0, 10))
+            search_entry.bind('<KeyRelease>', self.search_candidates)
+            
+            refresh_btn = CTkButton(
+                search_frame,
+                text="Refresh",
+                command=self.refresh_candidate_pool,
+                fg_color=self.accent_color,
+                hover_color="#2980b9",
+                corner_radius=8,
+                height=32
+            )
+            refresh_btn.pack(side=tk.LEFT)
+            
+            # Candidate list frame
+            list_container = CTkFrame(pool_frame, fg_color="transparent")
+            list_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(10, 20))
+            
+            # Create a scrollable frame for the candidate list
+            list_frame = CTkScrollableFrame(list_container, fg_color="transparent")
+            list_frame.pack(fill=tk.BOTH, expand=True)
+            
+            # Create table header
+            header_bg = "#2c3e50" if self.theme_mode == "dark" else "#ecf0f1"
+            header_fg = "white" if self.theme_mode == "dark" else "black"
+            
+            table_header = CTkFrame(list_frame, fg_color=header_bg, corner_radius=8)
+            table_header.pack(fill=tk.X, pady=(0, 2))
+            
+            # Configure columns with equal weights
+            table_header.grid_columnconfigure(0, weight=2)
+            table_header.grid_columnconfigure(1, weight=2)
+            table_header.grid_columnconfigure(2, weight=3)
+            table_header.grid_columnconfigure(3, weight=2)
+            
+            CTkLabel(table_header, text="Name", font=("Arial", 12, "bold"), text_color=header_fg).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+            CTkLabel(table_header, text="Email", font=("Arial", 12, "bold"), text_color=header_fg).grid(row=0, column=1, padx=10, pady=10, sticky="w")
+            CTkLabel(table_header, text="Skills", font=("Arial", 12, "bold"), text_color=header_fg).grid(row=0, column=2, padx=10, pady=10, sticky="w")
+            CTkLabel(table_header, text="Last Updated", font=("Arial", 12, "bold"), text_color=header_fg).grid(row=0, column=3, padx=10, pady=10, sticky="w")
+            
+            # Store reference to candidate rows for updating
+            self.candidate_rows_frame = list_frame
+            
+            # Start real-time updates
+            self.start_db_updates()
+            
+            # Load initial data
+            self.refresh_candidate_pool()
+        else:
+            # Fallback to ttk if CustomTkinter is not available
+            pool_frame = ttk.Frame(self.root, padding="20", style="TFrame")
+            pool_frame.pack(fill=tk.BOTH, expand=True)
+            self.current_frame = pool_frame
+            
+            # Header
+            header_frame = ttk.Frame(pool_frame, style="TFrame")
+            header_frame.pack(fill=tk.X, pady=(0, 20))
+            
+            ttk.Label(
+                header_frame,
+                text="📊 Live Candidate Pool",
+                style="Header.TLabel",
+                foreground=self.accent_color
+            ).pack(side=tk.LEFT)
+            
+            # Back button
+            back_btn = ttk.Button(
+                header_frame,
+                text="← Back to Welcome",
+                command=self.show_welcome_page,
+                style="TButton"
+            )
+            back_btn.pack(side=tk.RIGHT)
+            
+            # Stats frame
+            stats_frame = ttk.Frame(pool_frame, style="TFrame")
+            stats_frame.pack(fill=tk.X, pady=(0, 20))
+            
+            self.stats_label = ttk.Label(
+                stats_frame,
+                text="Loading statistics...",
+                style="Subheader.TLabel"
+            )
+            self.stats_label.pack(anchor="w")
+            
+            # Search frame
+            search_frame = ttk.Frame(pool_frame, style="TFrame")
+            search_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            ttk.Label(
+                search_frame,
+                text="Search:",
+                style="TLabel"
+            ).pack(side=tk.LEFT, padx=(0, 10))
+            
+            self.search_var = tk.StringVar()
+            search_entry = ttk.Entry(
+                search_frame,
+                textvariable=self.search_var,
+                width=30
+            )
+            search_entry.pack(side=tk.LEFT, padx=(0, 10))
+            search_entry.bind('<KeyRelease>', self.search_candidates)
+            
+            refresh_btn = ttk.Button(
+                search_frame,
+                text="Refresh",
+                command=self.refresh_candidate_pool,
+                style="TButton"
+            )
+            refresh_btn.pack(side=tk.LEFT)
+            
+            # Candidate list frame
+            list_frame = ttk.Frame(pool_frame, style="TFrame")
+            list_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+            
+            # Create treeview for candidates
+            columns = ("Name", "Email", "Skills", "Last Updated")
+            self.candidate_tree = ttk.Treeview(
+                list_frame,
+                columns=columns,
+                show="headings",
+                height=15
+            )
+            
+            # Configure columns
+            self.candidate_tree.heading("Name", text="Name")
+            self.candidate_tree.heading("Email", text="Email")
+            self.candidate_tree.heading("Skills", text="Skills")
+            self.candidate_tree.heading("Last Updated", text="Last Updated")
+            
+            self.candidate_tree.column("Name", width=200)
+            self.candidate_tree.column("Email", width=200)
+            self.candidate_tree.column("Skills", width=300)
+            self.candidate_tree.column("Last Updated", width=150)
+            
+            # Scrollbar for treeview
+            scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.candidate_tree.yview)
+            self.candidate_tree.configure(yscrollcommand=scrollbar.set)
+            
+            self.candidate_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            # Double-click to view details
+            self.candidate_tree.bind("<Double-1>", self.show_candidate_details)
+            
+            # Start real-time updates
+            self.start_db_updates()
+            
+            # Load initial data
+            self.refresh_candidate_pool()
     
     def refresh_candidate_pool(self):
         """Refresh the candidate pool display"""
@@ -911,144 +1279,290 @@ PDF Path: {resume.get('pdf_path', 'Not available')}
         # Clear welcome frame
         if self.current_frame:
             self.current_frame.destroy()
+        
+        # Use CustomTkinter if available, otherwise fallback to ttk
+        if CUSTOM_TKINTER_AVAILABLE:
+            # Set appearance mode based on current theme
+            set_appearance_mode("dark" if self.theme_mode == "dark" else "light")
+            set_default_color_theme("blue")
             
-        # Create main frame for chatbot
-        main_frame = ttk.Frame(self.root, padding="0", style="TFrame")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        self.current_frame = main_frame
+            # Create main frame for chatbot
+            main_frame = CTkFrame(self.root, corner_radius=0)
+            main_frame.pack(fill=tk.BOTH, expand=True)
+            self.current_frame = main_frame
 
-        # --- Sidebar ---
-        sidebar_width = 250
-        sidebar = ttk.Frame(main_frame, width=sidebar_width, style="TFrame")
-        sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
-        sidebar.pack_propagate(False)  # Prevent the sidebar from shrinking
-        
-        # Logo and title in sidebar
-        logo_frame = ttk.Frame(sidebar, style="TFrame")
-        logo_frame.pack(fill=tk.X, pady=(20, 10), padx=15)
-        
-        ttk.Label(
-            logo_frame, 
-            text="ScreenX", 
-            style="Header.TLabel",
-            foreground=self.accent_color
-        ).pack(side=tk.LEFT)
-        
-        # Theme toggle in sidebar
-        theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
-        self.theme_btn = ttk.Button(  # Store as instance variable
-            sidebar,
-            text=f"{theme_icon} {self.theme_mode.capitalize()}",
-            command=self.toggle_theme,
-            style="Toggle.TButton"
-        )
-        self.theme_btn.pack(fill=tk.X, padx=15, pady=(5, 20))
-        
-        # Load resumes button in sidebar
-        resume_count = len(self.resume_map) if hasattr(self, 'resume_map') and self.resume_map else 0
-        self.resumes_status = ttk.Label(
-            sidebar, 
-            text=f"Resumes loaded: {resume_count}",
-            style="TLabel"
-        )
-        self.resumes_status.pack(fill=tk.X, padx=15, pady=5)
-        
-        # Back to welcome button
-        back_btn = ttk.Button(
-            sidebar, 
-            text="← Back to Welcome", 
-            command=self.transition_to_welcome,
-            style="TButton"
-        )
-        back_btn.pack(fill=tk.X, padx=15, pady=5)
-        
-        # Status label in sidebar
-        self.status_label = ttk.Label(
-            sidebar, 
-            text="Ready", 
-            foreground="gray",
-            background=self.bg_color
-        )
-        self.status_label.pack(padx=15, pady=(10, 0), anchor="w")
+            # --- Sidebar ---
+            sidebar_width = 250
+            sidebar = CTkFrame(main_frame, width=sidebar_width, corner_radius=0)
+            sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
+            sidebar.pack_propagate(False)  # Prevent the sidebar from shrinking
+            
+            # Logo and title in sidebar
+            logo_frame = CTkFrame(sidebar, fg_color="transparent")
+            logo_frame.pack(fill=tk.X, pady=(20, 10), padx=15)
+            
+            CTkLabel(
+                logo_frame, 
+                text="ScreenX",
+                font=("Arial", 20, "bold"),
+                text_color=self.accent_color
+            ).pack(side=tk.LEFT)
+            
+            # Theme toggle in sidebar
+            theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
+            self.theme_btn = CTkButton(
+                sidebar,
+                text=f"{theme_icon} {self.theme_mode.capitalize()}",
+                command=self.toggle_theme,
+                fg_color=self.accent_color,
+                hover_color="#2980b9",
+                corner_radius=8
+            )
+            self.theme_btn.pack(fill=tk.X, padx=15, pady=(5, 20))
+            
+            # Load resumes button in sidebar
+            resume_count = len(self.resume_map) if hasattr(self, 'resume_map') and self.resume_map else 0
+            self.resumes_status = CTkLabel(
+                sidebar, 
+                text=f"Resumes loaded: {resume_count}",
+                font=("Arial", 12)
+            )
+            self.resumes_status.pack(fill=tk.X, padx=15, pady=5)
+            
+            # Back to welcome button
+            back_btn = CTkButton(
+                sidebar, 
+                text="← Back to Welcome", 
+                command=self.transition_to_welcome,
+                fg_color="transparent",
+                hover_color="#2c3e50",
+                border_width=1,
+                border_color="#95a5a6",
+                corner_radius=8
+            )
+            back_btn.pack(fill=tk.X, padx=15, pady=5)
+            
+            # Status label in sidebar
+            self.status_label = CTkLabel(
+                sidebar, 
+                text="Ready", 
+                text_color="gray"
+            )
+            self.status_label.pack(padx=15, pady=(10, 0), anchor="w")
 
-        # --- Chat Area (Main Content) ---
-        chat_container = ttk.Frame(main_frame, style="Chat.TFrame")
-        chat_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        
-        # Chat header
-        chat_header = ttk.Frame(chat_container, style="Chat.TFrame")
-        chat_header.pack(fill=tk.X, padx=20, pady=(20, 10))
-        
-        ttk.Label(
-            chat_header,
-            text="Chat with Resumes",
-            style="Subheader.TLabel",
-            foreground=self.text_color,
-            background=self.chat_bg
-        ).pack(anchor="w")
+            # --- Chat Area (Main Content) ---
+            chat_container = CTkFrame(main_frame, fg_color=self.chat_bg, corner_radius=0)
+            chat_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+            
+            # Chat header
+            chat_header = CTkFrame(chat_container, fg_color="transparent")
+            chat_header.pack(fill=tk.X, padx=20, pady=(20, 10))
+            
+            CTkLabel(
+                chat_header,
+                text="Chat with Resumes",
+                font=("Arial", 18, "bold"),
+                text_color=self.text_color
+            ).pack(anchor="w")
 
-        # Chat messages area with improved styling
-        chat_frame = ttk.Frame(chat_container, style="Chat.TFrame")
-        chat_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-        
-        self.chat_area = scrolledtext.ScrolledText(
-            chat_frame,
-            wrap=tk.WORD,
-            state="disabled",
-            font=("Arial", 14),
-            bg=self.chat_bg,
-            fg=self.text_color,
-            relief=tk.FLAT,
-            borderwidth=0,
-            padx=10,
-            pady=10
-        )
-        self.chat_area.tag_config("user", foreground=self.text_color, font=("Arial", 14, "bold"), lmargin1=20, lmargin2=20, rmargin=20)
-        self.chat_area.tag_config("bot", foreground=self.accent_color, font=("Arial", 14), lmargin1=20, lmargin2=20, rmargin=20)
-        self.chat_area.tag_config("system", foreground="gray", font=("Arial", 12, "italic"), lmargin1=20, lmargin2=20, rmargin=20)
-        self.chat_area.tag_config("user_bubble", background=self.user_msg_bg)
-        self.chat_area.tag_config("bot_bubble", background=self.bot_msg_bg)
-        self.chat_area.tag_config("spacing", spacing1=10, spacing3=10)
-        self.chat_area.pack(fill=tk.BOTH, expand=True)
+            # Chat messages area with improved styling
+            chat_frame = CTkScrollableFrame(chat_container, fg_color="transparent")
+            chat_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+            
+            self.chat_area = CTkTextbox(
+                chat_frame,
+                wrap="word",
+                state="disabled",
+                font=("Arial", 14),
+                fg_color="transparent",
+                text_color=self.text_color,
+                corner_radius=0,
+                border_width=0
+            )
+            self.chat_area.tag_config("user", foreground=self.text_color, lmargin1=20, lmargin2=20, rmargin=20)
+            self.chat_area.tag_config("bot", foreground=self.accent_color, lmargin1=20, lmargin2=20, rmargin=20)
+            self.chat_area.tag_config("system", foreground="gray", lmargin1=20, lmargin2=20, rmargin=20)
+            self.chat_area.tag_config("user_bubble", background=self.user_msg_bg)
+            self.chat_area.tag_config("bot_bubble", background=self.bot_msg_bg)
+            self.chat_area.tag_config("spacing", spacing1=10, spacing3=10)
+            self.chat_area.pack(fill=tk.BOTH, expand=True)
 
-        # Input area with modern styling
-        input_frame = ttk.Frame(chat_container, style="Chat.TFrame", padding=(0, 10, 0, 20))
-        input_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
-        
-        input_container = ttk.Frame(input_frame, style="Chat.TFrame")
-        input_container.pack(fill=tk.X)
-        
-        # Create a border effect for the input field
-        input_border = ttk.Frame(input_container, style="Chat.TFrame")
-        input_border.pack(fill=tk.X, padx=(0, 10))
-        
-        self.user_input = tk.Entry(
-            input_border, 
-            font=("Arial", 14),
-            bg=self.input_bg,
-            fg=self.text_color,
-            insertbackground=self.text_color,  # Cursor color
-            relief=tk.FLAT,
-            borderwidth=1,
-            highlightthickness=1,
-            highlightbackground=self.accent_color,
-            highlightcolor=self.accent_color
-        )
-        self.user_input.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=8, padx=10)
-        self.user_input.bind("<Return>", lambda e: self.send_question())
+            # Input area with modern styling
+            input_frame = CTkFrame(chat_container, fg_color="transparent")
+            input_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+            
+            input_container = CTkFrame(input_frame, fg_color="transparent")
+            input_container.pack(fill=tk.X)
+            
+            # Create a modern input field
+            self.user_input = CTkEntry(
+                input_container, 
+                font=("Arial", 14),
+                fg_color=self.input_bg,
+                text_color=self.text_color,
+                border_width=1,
+                border_color=self.accent_color,
+                corner_radius=8,
+                height=40
+            )
+            self.user_input.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+            self.user_input.bind("<Return>", lambda e: self.send_question())
 
-        self.send_btn = ttk.Button(
-            input_container, 
-            text="Send",
-            command=self.send_question,
-            style="TButton"
-        )
-        self.send_btn.pack(side=tk.RIGHT)
+            self.send_btn = CTkButton(
+                input_container, 
+                text="Send",
+                command=self.send_question,
+                fg_color=self.accent_color,
+                hover_color="#2980b9",
+                corner_radius=8,
+                width=80,
+                height=40
+            )
+            self.send_btn.pack(side=tk.RIGHT)
+            
+        else:
+            # Fallback to original ttk implementation
+            # Create main frame for chatbot
+            main_frame = ttk.Frame(self.root, padding="0", style="TFrame")
+            main_frame.pack(fill=tk.BOTH, expand=True)
+            self.current_frame = main_frame
+
+            # --- Sidebar ---
+            sidebar_width = 250
+            sidebar = ttk.Frame(main_frame, width=sidebar_width, style="TFrame")
+            sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
+            sidebar.pack_propagate(False)  # Prevent the sidebar from shrinking
+            
+            # Logo and title in sidebar
+            logo_frame = ttk.Frame(sidebar, style="TFrame")
+            logo_frame.pack(fill=tk.X, pady=(20, 10), padx=15)
+            
+            ttk.Label(
+                logo_frame, 
+                text="ScreenX", 
+                style="Header.TLabel",
+                foreground=self.accent_color
+            ).pack(side=tk.LEFT)
+            
+            # Theme toggle in sidebar
+            theme_icon = "🌙" if self.theme_mode == "light" else "☀️"
+            self.theme_btn = ttk.Button(  # Store as instance variable
+                sidebar,
+                text=f"{theme_icon} {self.theme_mode.capitalize()}",
+                command=self.toggle_theme,
+                style="Toggle.TButton"
+            )
+            self.theme_btn.pack(fill=tk.X, padx=15, pady=(5, 20))
+            
+            # Load resumes button in sidebar
+            resume_count = len(self.resume_map) if hasattr(self, 'resume_map') and self.resume_map else 0
+            self.resumes_status = ttk.Label(
+                sidebar, 
+                text=f"Resumes loaded: {resume_count}",
+                style="TLabel"
+            )
+            self.resumes_status.pack(fill=tk.X, padx=15, pady=5)
+            
+            # Back to welcome button
+            back_btn = ttk.Button(
+                sidebar, 
+                text="← Back to Welcome", 
+                command=self.transition_to_welcome,
+                style="TButton"
+            )
+            back_btn.pack(fill=tk.X, padx=15, pady=5)
+            
+            # Status label in sidebar
+            self.status_label = ttk.Label(
+                sidebar, 
+                text="Ready", 
+                foreground="gray",
+                background=self.bg_color
+            )
+            self.status_label.pack(padx=15, pady=(10, 0), anchor="w")
+
+            # --- Chat Area (Main Content) ---
+            chat_container = ttk.Frame(main_frame, style="Chat.TFrame")
+            chat_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+            
+            # Chat header
+            chat_header = ttk.Frame(chat_container, style="Chat.TFrame")
+            chat_header.pack(fill=tk.X, padx=20, pady=(20, 10))
+            
+            ttk.Label(
+                chat_header,
+                text="Chat with Resumes",
+                style="Subheader.TLabel",
+                foreground=self.text_color,
+                background=self.chat_bg
+            ).pack(anchor="w")
+
+            # Chat messages area with improved styling
+            chat_frame = CTkFrame(chat_container, fg_color=self.chat_bg)
+            chat_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+            
+            # Use CTkTextbox if available, otherwise fallback to ScrolledText
+            self.chat_area = CTkTextbox(
+                chat_frame,
+                wrap="word",
+                state="disabled",
+                font=("Arial", 14),
+                text_color=self.text_color,
+                corner_radius=8,
+                border_width=0,
+                padx=10,
+                pady=10
+            )
+            # CustomTkinter's CTkTextbox doesn't support font in tag_config
+            self.chat_area.tag_config("user", foreground=self.text_color, lmargin1=20, lmargin2=20, rmargin=20)
+            self.chat_area.tag_config("bot", foreground=self.accent_color, lmargin1=20, lmargin2=20, rmargin=20)
+            self.chat_area.tag_config("system", foreground="gray", lmargin1=20, lmargin2=20, rmargin=20)
+            self.chat_area.tag_config("user_bubble", background=self.user_msg_bg)
+            self.chat_area.tag_config("bot_bubble", background=self.bot_msg_bg)
+            self.chat_area.tag_config("spacing", spacing1=10, spacing3=10)
+            self.chat_area.pack(fill=tk.BOTH, expand=True)
+
+            # Input area with modern styling
+            input_frame = ttk.Frame(chat_container, style="Chat.TFrame", padding=(0, 10, 0, 20))
+            input_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+            
+            input_container = ttk.Frame(input_frame, style="Chat.TFrame")
+            input_container.pack(fill=tk.X)
+            
+            # Create a border effect for the input field
+            input_border = ttk.Frame(input_container, style="Chat.TFrame")
+            input_border.pack(fill=tk.X, padx=(0, 10))
+            
+            self.user_input = tk.Entry(
+                input_border, 
+                font=("Arial", 14),
+                bg=self.input_bg,
+                fg=self.text_color,
+                insertbackground=self.text_color,  # Cursor color
+                relief=tk.FLAT,
+                borderwidth=1,
+                highlightthickness=1,
+                highlightbackground=self.accent_color,
+                highlightcolor=self.accent_color
+            )
+            self.user_input.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=8, padx=10)
+            self.user_input.bind("<Return>", lambda e: self.send_question())
+
+            self.send_btn = ttk.Button(
+                input_container, 
+                text="Send",
+                command=self.send_question,
+                style="TButton"
+            )
+            self.send_btn.pack(side=tk.RIGHT)
 
         # Enable/disable based on whether resumes are loaded
         if self.resumes_loaded and hasattr(self, 'resume_map') and self.resume_map:
-            self.user_input.config(state="normal")
-            self.send_btn.config(state="normal")
+            self.user_input.configure(state="normal")
+            if CUSTOM_TKINTER_AVAILABLE and isinstance(self.send_btn, CTkButton):
+                self.send_btn.configure(state="normal")
+            else:
+                self.send_btn.config(state="normal")
             # Add welcome message for loaded resumes
             self.append_message("🤖 Bot", "Hello! I'm your resume assistant. Ask me things like:\n\n"
                                         "• Who knows Python?\n"
@@ -1164,24 +1678,32 @@ PDF Path: {resume.get('pdf_path', 'Not available')}
             return
         self.append_message("You", question)
         self.user_input.delete(0, tk.END)
-        self.send_btn.config(state="disabled")
+        self.send_btn.configure(state="disabled")
         
-        # Show typing indicator
-        self.chat_area.config(state="normal")
-        self.typing_indicator_pos = self.chat_area.index("end-1c")
-        self.chat_area.insert(self.typing_indicator_pos, "\n🤖 Bot is typing...", "system")
-        self.chat_area.config(state="disabled")
-        self.chat_area.see(tk.END)
+        # Add a small delay before showing typing indicator
+        self.root.after(1000, lambda: self.start_typing_indicator())
         
         # Synchronous thread call — no asyncio!
         threading.Thread(target=self._query_sync, args=(question,), daemon=True).start()
+        
+    def start_typing_indicator(self):
+        # Show typing indicator
+        self.chat_area.configure(state="normal")
+        self.typing_indicator_pos = self.chat_area.index("end-1c")
+        self.chat_area.insert(self.typing_indicator_pos, "\n\n🤖 ScreenX is typing...", "system")
+        self.chat_area.configure(state="disabled")
+        self.chat_area.see(tk.END)
 
     def _query_sync(self, question):
         """Synchronous version of query — uses local Ollama via HTTP or CLI fallback."""
-        # Remove typing indicator
-        self.chat_area.config(state="normal")
-        self.chat_area.delete(f"{self.typing_indicator_pos} linestart", f"{self.typing_indicator_pos} lineend+1c")
-        self.chat_area.config(state="disabled")
+        # Remove typing indicator safely
+        try:
+            self.chat_area.configure(state="normal")
+            if hasattr(self, 'typing_indicator_pos'):
+                self.chat_area.delete(f"{self.typing_indicator_pos} linestart", f"{self.typing_indicator_pos} lineend+1c")
+            self.chat_area.configure(state="disabled")
+        except Exception as e:
+            print(f"Error removing typing indicator: {e}")
         
         # Check if this is a PDF request
         from pdf_request_handler import detect_pdf_request, extract_candidate_name, find_best_matching_candidate, open_pdf_file
@@ -1195,12 +1717,12 @@ PDF Path: {resume.get('pdf_path', 'Not available')}
                     if pdf_path:
                         success = open_pdf_file(pdf_path)
                         if success:
-                            self.append_message("Opening PDF file for " + best_match)
+                            self.append_message("🤖 Bot", "Opening PDF file for " + best_match)
                             return
                         else:
-                            self.append_message(f"Error: Could not open PDF file for {best_match}")
+                            self.append_message("🤖 Bot", f"Error: Could not open PDF file for {best_match}")
                             return
-                self.append_message(f"Sorry, I couldn't find a resume for '{candidate_query}'")
+                self.append_message("🤖 Bot", f"Sorry, I couldn't find a resume for '{candidate_query}'")
                 return
         
         # Optimize prompt for faster processing
@@ -1225,32 +1747,46 @@ Instructions:
         # This function now handles both HTTP and CLI fallback synchronously
         query_ollama_local_fallback(prompt, token_callback)
 
-        self.root.after(0, lambda: self.send_btn.config(state="normal"))
+        self.root.after(0, lambda: self.send_btn.configure(state="normal"))
 
-    def append_message(self, sender: str, msg: str):
-        self.chat_area.config(state="normal")
+    def append_message(self, sender, msg):
+        if not hasattr(self, 'chat_area'):
+            return
+            
+        self.chat_area.configure(state="normal")
         
+        # Remove typing indicator if present
+        if hasattr(self, 'typing_indicator_pos'):
+            try:
+                self.chat_area.delete(self.typing_indicator_pos, tk.END)
+            except:
+                pass
+            
         # Add some spacing between messages
         if self.chat_area.get("1.0", "end-1c").strip():
             self.chat_area.insert(tk.END, "\n\n")
             
-        # Add message with appropriate styling
-        if sender == "You":
-            self.chat_area.insert(tk.END, f"{sender}: ", "user")
-            self.chat_area.insert(tk.END, msg)
+        # Add message with ChatGPT-like styling
+        if sender == "user" or sender == "You":
+            # Create a user message bubble similar to ChatGPT
+            self.chat_area.insert(tk.END, "You: ", "user")
+            self.chat_area.insert(tk.END, msg, "user_bubble")
+        elif sender == "system":
+            self.chat_area.insert(tk.END, "System: ", "system")
+            self.chat_area.insert(tk.END, msg, "system")
         else:
-            self.chat_area.insert(tk.END, f"{sender}: ", "bot")
-            self.chat_area.insert(tk.END, msg)
+            self.chat_area.insert(tk.END, "ScreenX: ", "bot")
+            self.chat_area.insert(tk.END, msg, "bot_bubble")
             
-        self.chat_area.config(state="disabled")
+        self.chat_area.configure(state="disabled")
         self.chat_area.see(tk.END)
 
     def append_token(self, token: str):
-        self.chat_area.config(state="normal")
+        self.chat_area.configure(state="normal")
         if self.chat_area.get("end-2c", "end") == "\n\n":
             self.chat_area.insert(tk.END, "🤖 Bot: ", "bot")
         self.chat_area.insert(tk.END, token)
-        self.chat_area.config(state="disabled")
+        self.chat_area.configure(state="disabled")
         self.chat_area.see(tk.END)
 
     # ---------------------------

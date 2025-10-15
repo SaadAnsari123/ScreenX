@@ -1,0 +1,836 @@
+# CustomTkinter UI Reference Manual
+
+## Table of Contents
+1. Introduction to CustomTkinter
+2. Getting Started
+3. Core Concepts
+4. UI Components Reference
+5. Layout Techniques
+6. Theming and Styling
+7. Advanced UI Patterns
+8. Best Practices
+9. Code Snippets
+
+## 1. Introduction to CustomTkinter
+
+CustomTkinter is a modern UI library built on top of the standard Tkinter library. It provides visually appealing, customizable widgets with support for:
+
+- Light and dark mode themes
+- Modern, flat design aesthetics
+- High DPI scaling across platforms (Windows, macOS, Linux)
+- Consistent appearance across operating systems
+- Customizable color themes
+
+CustomTkinter enhances the traditional Tkinter experience while maintaining compatibility with standard Tkinter elements.
+
+## 2. Getting Started
+
+### Installation
+
+```python
+pip install customtkinter
+```
+
+### Basic Application Structure
+
+```python
+import customtkinter
+
+# Set appearance mode and default color theme
+customtkinter.set_appearance_mode("System")  # Options: "System", "Dark", "Light"
+customtkinter.set_default_color_theme("blue")  # Options: "blue", "green", "dark-blue"
+
+# Create the main application window
+app = customtkinter.CTk()
+app.title("My CustomTkinter Application")
+app.geometry("800x600")
+
+# Add widgets here
+
+# Start the application
+app.mainloop()
+```
+
+## 3. Core Concepts
+
+### Appearance Modes
+
+CustomTkinter supports three appearance modes:
+- **System**: Adapts to the operating system's theme (recommended)
+- **Dark**: Forces dark mode
+- **Light**: Forces light mode
+
+```python
+customtkinter.set_appearance_mode("Dark")
+```
+
+### Color Themes
+
+Built-in themes:
+- **blue** (default)
+- **green**
+- **dark-blue**
+
+```python
+customtkinter.set_default_color_theme("green")
+```
+
+### UI Scaling
+
+CustomTkinter supports scaling for different screen resolutions:
+
+```python
+customtkinter.set_widget_scaling(1.2)  # Scales widgets by 120%
+customtkinter.set_window_scaling(1.1)  # Scales window by 110%
+```
+
+## 4. UI Components Reference
+
+### CTk (Window)
+
+The main window class, equivalent to Tkinter's Tk.
+
+```python
+app = customtkinter.CTk()
+app.title("Window Title")
+app.geometry("800x600")
+```
+
+### CTkFrame
+
+Container for organizing and grouping widgets.
+
+```python
+frame = customtkinter.CTkFrame(master=app, width=200, height=200, corner_radius=10)
+frame.pack(pady=20, padx=20, fill="both", expand=True)
+```
+
+Properties:
+- `corner_radius`: Rounded corners (default: 10)
+- `fg_color`: Background color
+- `border_width`: Border thickness
+- `border_color`: Border color
+
+### CTkButton
+
+Modern button with hover effects and customizable appearance.
+
+```python
+button = customtkinter.CTkButton(
+    master=frame,
+    text="Click Me",
+    command=button_callback,
+    width=120,
+    height=32,
+    corner_radius=8,
+    hover=True
+)
+button.pack(pady=10, padx=10)
+```
+
+Properties:
+- `text`: Button label
+- `command`: Function to call when clicked
+- `fg_color`: Button color
+- `hover_color`: Color when hovered
+- `text_color`: Text color
+- `corner_radius`: Rounded corners
+- `border_width`: Border thickness
+- `border_color`: Border color
+- `state`: "normal", "disabled"
+
+### CTkLabel
+
+Text display widget with enhanced styling.
+
+```python
+label = customtkinter.CTkLabel(
+    master=frame,
+    text="This is a Label",
+    font=("Roboto", 24),
+    text_color="white"
+)
+label.pack(pady=10, padx=10)
+```
+
+Properties:
+- `text`: Label text
+- `font`: Text font (name, size)
+- `text_color`: Text color
+- `anchor`: Text alignment ("w", "e", "n", "s", "center")
+
+### CTkEntry
+
+Text input field with modern styling.
+
+```python
+entry = customtkinter.CTkEntry(
+    master=frame,
+    placeholder_text="Type something...",
+    width=200
+)
+entry.pack(pady=10, padx=10)
+```
+
+Properties:
+- `placeholder_text`: Hint text when empty
+- `width`: Field width
+- `fg_color`: Background color
+- `border_color`: Border color
+- `text_color`: Text color
+
+### CTkCheckBox
+
+Checkbox with modern styling.
+
+```python
+checkbox = customtkinter.CTkCheckBox(
+    master=frame,
+    text="Remember me",
+    command=checkbox_callback,
+    variable=check_var
+)
+checkbox.pack(pady=10, padx=10)
+```
+
+Properties:
+- `text`: Label text
+- `command`: Function to call when toggled
+- `variable`: Variable to store state
+- `onvalue`: Value when checked
+- `offvalue`: Value when unchecked
+
+### CTkRadioButton
+
+Radio button with modern styling.
+
+```python
+radio_var = tkinter.IntVar(value=0)
+radio_button = customtkinter.CTkRadioButton(
+    master=frame,
+    text="Option 1",
+    variable=radio_var,
+    value=1
+)
+radio_button.pack(pady=10, padx=10)
+```
+
+Properties:
+- `text`: Label text
+- `variable`: Variable to store selection
+- `value`: Value when selected
+- `command`: Function to call when selected
+
+### CTkProgressBar
+
+Progress indicator with customizable appearance.
+
+```python
+progress = customtkinter.CTkProgressBar(
+    master=frame,
+    orientation="horizontal",
+    mode="determinate"
+)
+progress.pack(pady=10, padx=10)
+progress.set(0.7)  # Set to 70%
+```
+
+Properties:
+- `orientation`: "horizontal" or "vertical"
+- `mode`: "determinate" or "indeterminate"
+- `progress_color`: Bar color
+- `corner_radius`: Rounded corners
+
+### CTkSlider
+
+Slider control for value selection.
+
+```python
+slider = customtkinter.CTkSlider(
+    master=frame,
+    from_=0,
+    to=100,
+    number_of_steps=10,
+    command=slider_callback
+)
+slider.pack(pady=10, padx=10)
+slider.set(0.5)  # Set to middle position
+```
+
+Properties:
+- `from_`: Minimum value
+- `to`: Maximum value
+- `number_of_steps`: Step increments
+- `command`: Function to call when value changes
+
+### CTkTextbox
+
+Multi-line text display and editing.
+
+```python
+textbox = customtkinter.CTkTextbox(
+    master=frame,
+    width=300,
+    height=150,
+    corner_radius=8
+)
+textbox.pack(pady=10, padx=10)
+textbox.insert("1.0", "This is a multi-line text box\nwith example text.")
+```
+
+Properties:
+- `width`, `height`: Dimensions
+- `fg_color`: Background color
+- `text_color`: Text color
+- `corner_radius`: Rounded corners
+
+### CTkScrollableFrame
+
+Frame with scrollbar for content that exceeds view.
+
+```python
+scrollable_frame = customtkinter.CTkScrollableFrame(
+    master=frame,
+    width=300,
+    height=200,
+    label_text="Scrollable Items"
+)
+scrollable_frame.pack(pady=10, padx=10)
+
+# Add widgets to the scrollable frame
+for i in range(20):
+    customtkinter.CTkButton(scrollable_frame, text=f"Item {i}").pack(pady=5)
+```
+
+Properties:
+- `width`, `height`: Visible dimensions
+- `label_text`: Optional header text
+- `corner_radius`: Rounded corners
+
+### CTkTabview
+
+Tabbed interface for organizing content.
+
+```python
+tabview = customtkinter.CTkTabview(master=frame, width=400, height=300)
+tabview.pack(pady=10, padx=10)
+
+# Create tabs
+tabview.add("Tab 1")
+tabview.add("Tab 2")
+tabview.add("Tab 3")
+
+# Add widgets to tabs
+customtkinter.CTkLabel(tabview.tab("Tab 1"), text="Content in Tab 1").pack(pady=20)
+```
+
+Properties:
+- `width`, `height`: Dimensions
+- `corner_radius`: Rounded corners
+- `segmented_button_fg_color`: Tab button color
+- `segmented_button_selected_color`: Selected tab color
+
+### CTkOptionMenu (Dropdown)
+
+Dropdown selection menu.
+
+```python
+optionmenu = customtkinter.CTkOptionMenu(
+    master=frame,
+    values=["Option 1", "Option 2", "Option 3"],
+    command=optionmenu_callback
+)
+optionmenu.pack(pady=10, padx=10)
+optionmenu.set("Option 1")  # Set default value
+```
+
+Properties:
+- `values`: List of options
+- `command`: Function to call when selection changes
+- `dynamic_resizing`: Adjust width based on content
+
+### CTkComboBox
+
+Text entry with dropdown suggestions.
+
+```python
+combobox = customtkinter.CTkComboBox(
+    master=frame,
+    values=["Item 1", "Item 2", "Item 3"],
+    command=combobox_callback
+)
+combobox.pack(pady=10, padx=10)
+```
+
+Properties:
+- `values`: List of suggestions
+- `command`: Function to call when selection changes
+- `dropdown_fg_color`: Dropdown background color
+
+### CTkSegmentedButton
+
+Button group for mutually exclusive options.
+
+```python
+segmented_button = customtkinter.CTkSegmentedButton(
+    master=frame,
+    values=["Daily", "Weekly", "Monthly"],
+    command=segmented_button_callback
+)
+segmented_button.pack(pady=10, padx=10)
+segmented_button.set("Weekly")  # Set default selection
+```
+
+Properties:
+- `values`: List of options
+- `command`: Function to call when selection changes
+- `selected_color`: Color of selected segment
+- `unselected_color`: Color of unselected segments
+
+### CTkSwitch
+
+Toggle switch control.
+
+```python
+switch = customtkinter.CTkSwitch(
+    master=frame,
+    text="Dark Mode",
+    command=switch_callback
+)
+switch.pack(pady=10, padx=10)
+```
+
+Properties:
+- `text`: Label text
+- `command`: Function to call when toggled
+- `variable`: Variable to store state
+- `onvalue`: Value when on
+- `offvalue`: Value when off
+
+## 5. Layout Techniques
+
+### Grid Layout
+
+The most flexible layout manager for complex UIs.
+
+```python
+# Configure grid weights
+frame.grid_columnconfigure(0, weight=1)
+frame.grid_columnconfigure(1, weight=3)
+frame.grid_rowconfigure(0, weight=1)
+
+# Place widgets in grid
+label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+button.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
+```
+
+Key parameters:
+- `row`, `column`: Position in grid
+- `rowspan`, `columnspan`: Span multiple cells
+- `padx`, `pady`: External padding
+- `sticky`: Alignment within cell ("n", "s", "e", "w", "ne", "nw", "se", "sw", "nsew")
+
+### Pack Layout
+
+Simple layout for stacking widgets.
+
+```python
+label.pack(fill="x", expand=True, padx=10, pady=5)
+button.pack(fill="none", expand=False, padx=10, pady=5)
+```
+
+Key parameters:
+- `fill`: How widget fills space ("none", "x", "y", "both")
+- `expand`: Whether widget expands to fill space
+- `side`: Which side to pack against ("top", "bottom", "left", "right")
+- `padx`, `pady`: External padding
+
+### Place Layout
+
+Absolute positioning for precise control.
+
+```python
+button.place(x=100, y=100, width=200, height=50)
+# Or using relative positioning
+button.place(relx=0.5, rely=0.5, relwidth=0.8, anchor="center")
+```
+
+Key parameters:
+- `x`, `y`: Absolute coordinates
+- `relx`, `rely`: Relative coordinates (0.0 to 1.0)
+- `width`, `height`: Absolute dimensions
+- `relwidth`, `relheight`: Relative dimensions
+- `anchor`: Alignment point ("n", "s", "e", "w", "center", etc.)
+
+## 6. Theming and Styling
+
+### Custom Color Themes
+
+```python
+customtkinter.set_default_color_theme({
+    "CTk": {
+        "fg_color": ["#f2f2f2", "#2b2b2b"]
+    },
+    "CTkButton": {
+        "corner_radius": 6,
+        "border_width": 0,
+        "fg_color": ["#3a7ebf", "#1f538d"],
+        "hover_color": ["#325882", "#14375e"],
+        "text_color": ["#DCE4EE", "#DCE4EE"]
+    }
+    # Add more widget customizations...
+})
+```
+
+### Widget-Specific Styling
+
+```python
+# Configure specific widget appearance
+button = customtkinter.CTkButton(
+    master=frame,
+    text="Custom Button",
+    fg_color="#FF5733",
+    hover_color="#C44025",
+    text_color="#FFFFFF",
+    corner_radius=10,
+    border_width=2,
+    border_color="#8B0000"
+)
+```
+
+### Dynamic Theme Switching
+
+```python
+def change_appearance_mode(new_mode):
+    customtkinter.set_appearance_mode(new_mode)
+
+# Create mode selector
+mode_menu = customtkinter.CTkOptionMenu(
+    master=frame,
+    values=["Light", "Dark", "System"],
+    command=change_appearance_mode
+)
+mode_menu.pack(pady=10)
+```
+
+## 7. Advanced UI Patterns
+
+### Responsive Layouts
+
+```python
+def on_resize(event):
+    # Adjust layout based on window size
+    if event.width < 600:
+        # Switch to vertical layout
+        left_frame.pack(side="top", fill="both", expand=True)
+        right_frame.pack(side="top", fill="both", expand=True)
+    else:
+        # Switch to horizontal layout
+        left_frame.pack(side="left", fill="both", expand=True)
+        right_frame.pack(side="right", fill="both", expand=True)
+
+# Bind resize event
+app.bind("<Configure>", on_resize)
+```
+
+### Custom Scrollable Widgets
+
+```python
+class ScrollableButtonFrame(customtkinter.CTkScrollableFrame):
+    def __init__(self, master, item_list, command=None, **kwargs):
+        super().__init__(master, **kwargs)
+        
+        self.command = command
+        self.buttons = []
+        
+        for item in item_list:
+            self.add_item(item)
+    
+    def add_item(self, item):
+        button = customtkinter.CTkButton(self, text=item, command=lambda: self.command(item))
+        button.pack(fill="x", pady=(0, 5))
+        self.buttons.append(button)
+```
+
+### Card-Based UI
+
+```python
+def create_card(parent, title, description, image_path=None):
+    card = customtkinter.CTkFrame(parent, corner_radius=10)
+    card.pack(fill="x", padx=10, pady=10, expand=True)
+    
+    if image_path:
+        # Load and display image
+        img = customtkinter.CTkImage(Image.open(image_path), size=(120, 120))
+        image_label = customtkinter.CTkLabel(card, image=img, text="")
+        image_label.pack(pady=(10, 5))
+    
+    title_label = customtkinter.CTkLabel(card, text=title, font=("Roboto", 16, "bold"))
+    title_label.pack(pady=5)
+    
+    desc_label = customtkinter.CTkLabel(card, text=description, wraplength=200)
+    desc_label.pack(pady=(0, 10), padx=10)
+    
+    return card
+```
+
+### Form Validation
+
+```python
+def validate_form():
+    errors = []
+    
+    # Validate name field
+    name = name_entry.get()
+    if not name:
+        errors.append("Name is required")
+        name_entry.configure(border_color="red")
+    else:
+        name_entry.configure(border_color="gray")
+    
+    # Validate email field
+    email = email_entry.get()
+    if not email or "@" not in email:
+        errors.append("Valid email is required")
+        email_entry.configure(border_color="red")
+    else:
+        email_entry.configure(border_color="gray")
+    
+    # Display errors or submit form
+    if errors:
+        error_text = "\n".join(errors)
+        error_label.configure(text=error_text)
+        return False
+    else:
+        error_label.configure(text="")
+        return True
+```
+
+## 8. Best Practices
+
+### UI Design Principles
+
+1. **Consistency**: Maintain consistent spacing, colors, and component usage
+2. **Hierarchy**: Establish clear visual hierarchy with size, color, and placement
+3. **Feedback**: Provide visual feedback for user interactions
+4. **Simplicity**: Keep interfaces clean and focused on essential elements
+5. **Accessibility**: Ensure text is readable and controls are properly sized
+
+### Performance Optimization
+
+1. **Limit widget creation**: Create widgets only when needed
+2. **Use after() for delays**: Schedule updates instead of blocking the main thread
+3. **Batch updates**: Group multiple UI updates together
+4. **Reuse images**: Load images once and reuse them
+5. **Lazy loading**: Load content only when it becomes visible
+
+### Code Organization
+
+1. **Class-based structure**: Organize UI components into classes
+2. **Separate logic from UI**: Keep business logic separate from UI code
+3. **Use controller pattern**: Mediate between UI and data models
+4. **Consistent naming**: Use clear, consistent naming conventions
+5. **Document complex layouts**: Comment on the purpose of layout sections
+
+## 9. Code Snippets
+
+### Login Form
+
+```python
+def create_login_form(master):
+    frame = customtkinter.CTkFrame(master, corner_radius=10)
+    frame.pack(pady=20, padx=20, fill="both", expand=True)
+    
+    # Title
+    title = customtkinter.CTkLabel(frame, text="Login", font=("Roboto", 24))
+    title.pack(pady=(20, 10))
+    
+    # Username
+    username_entry = customtkinter.CTkEntry(frame, placeholder_text="Username", width=300)
+    username_entry.pack(pady=10, padx=20)
+    
+    # Password
+    password_entry = customtkinter.CTkEntry(frame, placeholder_text="Password", show="•", width=300)
+    password_entry.pack(pady=10, padx=20)
+    
+    # Remember me
+    remember_var = customtkinter.StringVar(value="off")
+    remember = customtkinter.CTkCheckBox(frame, text="Remember me", variable=remember_var, onvalue="on", offvalue="off")
+    remember.pack(pady=10, padx=20)
+    
+    # Login button
+    login_button = customtkinter.CTkButton(frame, text="Login", width=300, command=lambda: login(username_entry.get(), password_entry.get()))
+    login_button.pack(pady=10, padx=20)
+    
+    # Register link
+    register_link = customtkinter.CTkLabel(frame, text="Don't have an account? Register", cursor="hand2", text_color=["#3a7ebf", "#1f538d"])
+    register_link.pack(pady=(5, 20))
+    register_link.bind("<Button-1>", lambda e: show_register_form())
+    
+    return frame
+```
+
+### Dashboard Layout
+
+```python
+def create_dashboard(master):
+    # Main container
+    container = customtkinter.CTkFrame(master, corner_radius=0, fg_color="transparent")
+    container.pack(fill="both", expand=True)
+    
+    # Configure grid
+    container.grid_columnconfigure(0, weight=1)
+    container.grid_columnconfigure(1, weight=4)
+    container.grid_rowconfigure(0, weight=1)
+    
+    # Sidebar
+    sidebar = customtkinter.CTkFrame(container, corner_radius=0, width=200)
+    sidebar.grid(row=0, column=0, sticky="nsew")
+    
+    # Logo
+    logo_label = customtkinter.CTkLabel(sidebar, text="MyApp", font=("Roboto", 20, "bold"))
+    logo_label.pack(pady=(20, 20), padx=20)
+    
+    # Navigation buttons
+    nav_buttons = [
+        {"text": "Dashboard", "icon": "home.png", "command": show_dashboard},
+        {"text": "Analytics", "icon": "chart.png", "command": show_analytics},
+        {"text": "Settings", "icon": "settings.png", "command": show_settings},
+        {"text": "Profile", "icon": "user.png", "command": show_profile}
+    ]
+    
+    for btn in nav_buttons:
+        button = customtkinter.CTkButton(
+            sidebar, 
+            text=btn["text"],
+            command=btn["command"],
+            anchor="w",
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            hover_color=("gray70", "gray30")
+        )
+        button.pack(pady=5, padx=10, fill="x")
+    
+    # Main content area
+    content = customtkinter.CTkFrame(container, corner_radius=10)
+    content.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+    
+    return container, content
+```
+
+### Data Table
+
+```python
+def create_data_table(master, headers, data):
+    table_frame = customtkinter.CTkFrame(master)
+    table_frame.pack(fill="both", expand=True, padx=10, pady=10)
+    
+    # Configure grid
+    for i, header in enumerate(headers):
+        table_frame.grid_columnconfigure(i, weight=1)
+    
+    # Create headers
+    for i, header in enumerate(headers):
+        header_label = customtkinter.CTkLabel(
+            table_frame,
+            text=header,
+            font=("Roboto", 12, "bold"),
+            fg_color=("gray85", "gray25"),
+            corner_radius=4
+        )
+        header_label.grid(row=0, column=i, padx=2, pady=2, sticky="ew")
+    
+    # Create data rows
+    for row_idx, row_data in enumerate(data, start=1):
+        for col_idx, cell_data in enumerate(row_data):
+            cell = customtkinter.CTkLabel(
+                table_frame,
+                text=str(cell_data),
+                anchor="w",
+                padx=10
+            )
+            cell.grid(row=row_idx, column=col_idx, padx=2, pady=2, sticky="ew")
+            
+            # Alternate row colors
+            if row_idx % 2 == 0:
+                cell.configure(fg_color=("gray95", "gray15"))
+    
+    return table_frame
+```
+
+### Settings Panel
+
+```python
+def create_settings_panel(master):
+    settings_frame = customtkinter.CTkFrame(master)
+    settings_frame.pack(fill="both", expand=True, padx=20, pady=20)
+    
+    # Title
+    title = customtkinter.CTkLabel(settings_frame, text="Settings", font=("Roboto", 20, "bold"))
+    title.pack(pady=(10, 20))
+    
+    # Appearance section
+    appearance_frame = customtkinter.CTkFrame(settings_frame)
+    appearance_frame.pack(fill="x", padx=10, pady=10)
+    
+    appearance_label = customtkinter.CTkLabel(appearance_frame, text="Appearance", font=("Roboto", 14, "bold"))
+    appearance_label.pack(anchor="w", padx=10, pady=(10, 5))
+    
+    # Theme selector
+    theme_label = customtkinter.CTkLabel(appearance_frame, text="Theme:")
+    theme_label.pack(anchor="w", padx=10, pady=5)
+    
+    theme_menu = customtkinter.CTkOptionMenu(
+        appearance_frame,
+        values=["Light", "Dark", "System"],
+        command=lambda choice: customtkinter.set_appearance_mode(choice.lower())
+    )
+    theme_menu.pack(anchor="w", padx=10, pady=(0, 5))
+    theme_menu.set("System")
+    
+    # Color theme selector
+    color_label = customtkinter.CTkLabel(appearance_frame, text="Color Theme:")
+    color_label.pack(anchor="w", padx=10, pady=5)
+    
+    color_menu = customtkinter.CTkOptionMenu(
+        appearance_frame,
+        values=["Blue", "Green", "Dark Blue"],
+        command=lambda choice: customtkinter.set_default_color_theme(choice.lower().replace(" ", "-"))
+    )
+    color_menu.pack(anchor="w", padx=10, pady=(0, 10))
+    color_menu.set("Blue")
+    
+    # Notifications section
+    notifications_frame = customtkinter.CTkFrame(settings_frame)
+    notifications_frame.pack(fill="x", padx=10, pady=10)
+    
+    notifications_label = customtkinter.CTkLabel(notifications_frame, text="Notifications", font=("Roboto", 14, "bold"))
+    notifications_label.pack(anchor="w", padx=10, pady=(10, 5))
+    
+    # Notification switches
+    switches = [
+        {"text": "Email Notifications", "default": "on"},
+        {"text": "Push Notifications", "default": "on"},
+        {"text": "Sound Alerts", "default": "off"}
+    ]
+    
+    for switch_data in switches:
+        switch_var = customtkinter.StringVar(value=switch_data["default"])
+        switch = customtkinter.CTkSwitch(
+            notifications_frame,
+            text=switch_data["text"],
+            variable=switch_var,
+            onvalue="on",
+            offvalue="off"
+        )
+        switch.pack(anchor="w", padx=10, pady=5)
+    
+    # Save button
+    save_button = customtkinter.CTkButton(settings_frame, text="Save Settings")
+    save_button.pack(pady=20)
+    
+    return settings_frame
+```
+
+This reference manual provides a comprehensive guide to creating attractive and functional user interfaces with CustomTkinter. By following these guidelines and examples, you can create modern, responsive applications with a consistent look and feel across all platforms.

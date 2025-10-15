@@ -1,2 +1,1 @@
-
-        if hasattr(self, 'user_input'):
+#1a1a1a
